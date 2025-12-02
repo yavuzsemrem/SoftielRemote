@@ -1,0 +1,11 @@
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\bin\Debug\net8.0\SoftielRemote.Core.deps.json
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\bin\Debug\net8.0\SoftielRemote.Core.dll
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\bin\Debug\net8.0\SoftielRemote.Core.pdb
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.AssemblyInfoInputs.cache
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.AssemblyInfo.cs
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.csproj.CoreCompileInputs.cache
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.dll
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\refint\SoftielRemote.Core.dll
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.pdb
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\ref\SoftielRemote.Core.dll

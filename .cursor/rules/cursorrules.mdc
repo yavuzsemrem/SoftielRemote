@@ -1,0 +1,232 @@
+---
+alwaysApply: true
+---
+
+
+# SoftielRemote – Uzaktan Erişim (AnyDesk / TeamViewer Alternatifi)
+
+Bu proje; AnyDesk / TeamViewer benzeri, **ID ile bağlanılan**, **ekran paylaşımı + mouse/klavye kontrolü** sağlayan bir uzaktan masaüstü uygulamasıdır.  
+İlk hedef platform: **Windows Desktop** (ileride Mac/Linux genişlemeye açık olsun).
+
+## 1. Ürün Tanımı (Kısaca Ne Yapıyoruz?)
+
+- Kullanıcının bilgisayarına kurulan küçük bir **Agent** arka planda çalışır.
+- Agent, merkezi **Backend**’e bağlanarak kendini kayıt eder ve benzersiz bir **Device ID** alır.
+- Aynı makinada (veya başka bir makinada) çalışan **UI uygulaması (Controller/Client App)** üzerinden:
+  - Kullanıcı kendi ID’sini görür (Allow Access modu),
+  - Destek veren kişi başka birinin ID’sini girerek ona bağlanır (Remote Support modu).
+- Bağlantı kurulduğunda:
+  - Uzak ekran canlı olarak aktarılır,
+  - Mouse hareketleri, tıklamalar ve klavye girdileri uzak makinede uygulanır.
+
+İlk fazda:
+- Tek platform: Windows
+- Tek monitör desteği
+- Temel kalite ayarı yeterli (yüksek / düşük profil)
+- Dosya transferi, chat, çoklu monitör gibi özellikler sonraki fazlarda gelecek.
+
+---
+
+## 2. Genel Mimari
+
+Çok bileşenli ama mantıksal olarak basit bir mimari kullanıyoruz:
+
+1. **SoftielRemote.Backend**
+   - ASP.NET Core tabanlı bir **Backend API**.
+   - Görevleri:
+     - Agent’ların kayıt olması (Register Agent)
+     - Agent online/online değil durumunu takip etmek
+     - Controller’ın “bu ID’ye bağlanmak istiyorum” isteğini almak
+     - Controller ile Agent arasında **signaling** yapmak (WebSocket / SignalR)
+     - Basit kimlik doğrulama (ileride kullanıcı hesabı vs. için genişleyebilir)
+
+2. **SoftielRemote.Agent (Windows Service / Tray App)**
+   - Uzak bilgisayarda sürekli çalışan program.
+   - Görevleri:
+     - Device ID üretmek ve Backend’e kayıt olmak
+     - Backend’den gelen “Controller bağlanmak istiyor” sinyallerini dinlemek
+     - Ekran görüntüsünü almak (screen capture)
+     - Ekranı sıkıştırılmış formatta Controller’a göndermek
+     - Controller’dan gelen mouse/klavye komutlarını işletim sistemine enjekte etmek
+   - Çalışma şekli:
+     - Servis veya background console + tray UI ile olabilir.
+     - Agent çalışıyorsa, UI kapansa bile uzak bağlantı kurulabilmeli.
+
+3. **SoftielRemote.App (Desktop UI – Controller & Client UI)**
+   - Kullanıcının gördüğü ana uygulama.
+   - Tek EXE, içinde iki mod var:
+     - **Allow Access (Client Modu)** → Kendi ID’sini gösterir, gelen bağlantıyı kabul/ret eder.
+     - **Remote Support (Controller Modu)** → Başka bir ID’ye bağlanır, uzak ekranı görür, kontrol eder.
+   - Görevleri:
+     - Backend ile haberleşerek istenen ID’ye bağlantı talebi göndermek
+     - Bağlantı kabul edildiğinde Agent ile **P2P veya relay** üzerinden ekran/video + input iletişimi kurmak
+     - Remote oturum sırasında ekran görüntüsünü render etmek ve kullanıcı inputlarını Agent’a iletmek.
+
+4. **Core Library (SoftielRemote.Core)**
+   - Ortak kullanılan tipler ve protokoller:
+     - DTO’lar (AgentRegistrationRequest, ConnectionRequest, RemoteFrame, RemoteInputEvent vb.)
+     - Basic config, constantlar
+     - Protokol mesaj modelleri (JSON olarak taşınacak yapılar)
+
+---
+
+## 3. Proje Yapısı (Solution / Folder Yapısı)
+
+Lütfen aşağıdaki solution yapısını kullan:
+
+- `SoftielRemote.sln`
+
+  - `src/SoftielRemote.Backend`
+    - ASP.NET Core Web API
+    - Katmanlar:
+      - `Controllers/`
+      - `Hubs/` (SignalR veya WebSocket controller’ları)
+      - `Services/`
+      - `Repositories/` (eğer kalıcı depolama eklersek)
+      - `Models/` (DTO, entity)
+
+  - `src/SoftielRemote.Agent`
+    - Windows için çalışan Agent uygulaması (ilk etapta console app + tray support olabilir).
+    - Klasörler:
+      - `ScreenCapture/` (ekran yakalama)
+      - `InputInjection/` (mouse/klavye kontrolü)
+      - `Networking/` (Backend ve Controller ile iletişim)
+      - `Config/`
+      - `Services/`
+
+  - `src/SoftielRemote.App`
+    - Desktop UI (WPF öneriyoruz, .NET 8 kullan).
+    - Klasörler:
+      - `Views/`
+      - `ViewModels/`
+      - `Services/` (BackendClientService, ConnectionService vb.)
+      - `Models/`
+      - `Controls/`
+    - MVVM pattern kullanalım.
+
+  - `src/SoftielRemote.Core`
+    - Ortak paylaşılan sınıflar:
+      - `Dtos/`
+      - `Enums/`
+      - `Messages/` (RemoteFrameMessage, RemoteInputMessage vb.)
+      - `Abstractions/` (ihtiyaç olursa interface’ler)
+      - `Utils/`
+
+  - `tests/*` (ileride test projeleri buraya eklenebilir)
+
+---
+
+## 4. Kullanılacak Teknolojiler
+
+### Backend (SoftielRemote.Backend)
+- **Dil / Framework:**
+  - C#, .NET 8
+  - ASP.NET Core Minimal API veya klasik Controller tabanlı API (Controller tercih edelim, daha okunaklı)
+- **Gerçek zamanlı iletişim:**
+  - İlk aşamada **SignalR** (WebSocket fallback’li)
+  - Görev: sadece signaling + connection state; video/data stream’i için ayrıca kanal olabilir.
+- **Veritabanı (İlk Faz):**
+  - İlk MVP’de **in-memory store** veya basit bir **LiteDB / Sqlite** ile ID–connection tracking yapılabilir.
+  - Genişlemeye açık olsun; repository pattern ile soyutla.
+- **Kimlik Doğrulama:**
+  - İlk fazda zorunlu değil.
+  - İleride JWT / API key destekli hale getir.
+
+### Agent (SoftielRemote.Agent)
+- **Dil / Framework:**
+  - C#, .NET 8 Console / Worker Service
+  - Windows’tan işe başla (Win32 API ile ekran ve input kontrolü).
+- **Ekran Yakalama:**
+  - GDI+ veya DirectX tabanlı ekran yakalama (Cursor’dan optimize, düşük overhead’li bir çözüm istemesini bekle).
+  - Çıktıyı:
+    - Hızlıca encode edilip (ör. PNG/JPEG sıkıştırma, ileride H.264) parça parça gönder.
+- **Video / Frame Gönderimi:**
+  - İlk versiyonda:
+    - Basit bir mekanizma: TCP üzerinden sıkıştırılmış görüntü frame’leri (FPS 10–15).
+  - Uzun vadede:
+    - WebRTC veya özel UDP protokolüne evrilebilir.
+- **Input Injection:**
+  - Win32 API ile:
+    - mouse_event / SendInput vb. kullanarak mouse hareket/tıklama
+    - klavye tuş basımı (key down/up)
+  - Güvenlik açısından:
+    - Bağlantı onayı olmadan işlem yapma.
+    - İleride izin/verme seviyelerini eklemek (sadece görüntü, görüntü + kontrol vb.).
+
+### Desktop UI (SoftielRemote.App)
+- **Dil / Framework:**
+  - C#, .NET 8
+  - WPF (MVVM)
+- **UI Temel Özellikler:**
+  - Ana ekran:
+    - Sol tarafta “Your ID”, “Password”
+    - Sağ tarafta “Remote ID” input’u ve “Connect” butonu
+  - Bağlantı penceresi:
+    - Ortada uzak ekranı gösteren bir kontrol
+    - Üst toolbarda:
+      - Disconnect
+      - Quality (Low / Medium / High)
+      - Fullscreen (ileride)
+- **Bağlantı Yönetimi:**
+  - Backend API Client (HttpClient + SignalR HubConnection)
+  - Agent ile data channel:
+    - İlk aşamada basit TCP stream’i; UI sadece gelen frame’leri gösterir.
+
+### Ortak Kurallar
+- Kod dili: **C#** (Backend, Agent, App)
+- İsimlendirme:
+  - Sınıf ve method isimleri İngilizce (PascalCase).
+  - Değişken isimleri İngilizce (camelCase).
+- Dokümantasyon:
+  - Önemli public method’lar için XML doc comment ekleyelim.
+- Hata yönetimi:
+  - Her katmanda logging altyapısı (Microsoft.Extensions.Logging).
+  - Kritik yerlerde try/catch + anlamlı log mesajları.
+
+---
+
+## 5. Geliştirme Fazları (Cursor’a Rehber)
+
+Cursor’dan isterken aşağıdaki faz mantığına uy:
+
+### Faz 1 – Aynı makinede / LAN’de Çalışan Basit Prototip
+- Backend’de:
+  - Basit register endpoint: `/api/agents/register`
+  - Basit connection request endpoint: `/api/connections/request`
+- Agent:
+  - Dummy screen capture (küçük resolution, örn. 800x600)
+  - Belirli aralıklarla (ör. 200 ms) frame üreterek Controller’a yollayacak.
+- App:
+  - ID gösteren alanlar
+  - “Connect to ID” butonu
+  - Bağlanınca ekrana image stream’i paint eden kontrol.
+
+### Faz 2 – Gerçek Uzak Bağlantı (NAT Arkasında Olmasa da İnternet Üzerinde)
+- SignalR ile signaling + connection state
+- TCP üzerinden frame ve input iletimi
+- Basit kalite ayarı (frame boyutu + FPS düşürme)
+
+### Faz 3 – Güvenlik + UX Geliştirmeleri
+- Bağlantı onay ekranı
+- Parola üretimi ve kontrolü
+- Bağlantı loglama
+- Tray ikon, auto start vb.
+
+---
+
+## 6. Cursor’dan Beklenen Tarz
+
+- Kod üretirken:
+  - Önce kısa bir açıklama yap (hangi projeye, hangi dosyaya ne eklediğini belirt).
+  - Sonra **tam ve çalışabilir** kod blokları ver.
+- Parça parça ilerle:
+  - Önce projeleri ve klasör yapısını oluştur.
+  - Sonra Backend temel endpoint’lerini ekle.
+  - Sonra Agent’in iskeletini oluştur.
+  - Sonra App için MVVM tabanlı basit UI ekranlarını oluştur.
+- Mümkün olduğunca:
+  - Magic string’lerden kaçın.
+  - Config değerlerini `appsettings.json` veya `Settings` sınıflarına taşı.
+- Türkçe açıklama / yorumlar serbest, ama kod isimleri İngilizce olsun.
+
+---
