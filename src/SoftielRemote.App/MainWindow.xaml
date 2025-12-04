@@ -13,7 +13,7 @@
         AllowsTransparency="True"
         MinWidth="600"
         MinHeight="400"
-        Icon="src/img/transparent.png"
+        Icon="pack://application:,,,/SoftielRemote.App;component/src/img/transparent.png"
         MouseMove="Window_MouseMove"
         MouseLeftButtonUp="Window_MouseLeftButtonUp">
     
@@ -22,6 +22,7 @@
         <local:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <local:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
         <local:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
+        <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         
         <!-- Gradient Brush: #0f172a -> Black -->
         <LinearGradientBrush x:Key="MainGradientBrush" StartPoint="0,0" EndPoint="0,1">
@@ -159,7 +160,7 @@
                 
                 <!-- Logo -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Image Source="src/img/transparent.png" 
+                    <Image Source="pack://application:,,,/SoftielRemote.App;component/src/img/transparent.png" 
                            Width="28" Height="28" 
                            Margin="0,0,10,0"
                            VerticalAlignment="Center"
@@ -281,15 +282,23 @@
                 <!-- Remote Address Input -->
                 <Grid Grid.Column="1" VerticalAlignment="Center">
                     <TextBox x:Name="RemoteAddressTextBox"
-                             Text="{Binding RemoteDeviceId, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource ModernTextBox}"
-                             VerticalAlignment="Center"
-                             IsEnabled="{Binding IsConnected, Converter={StaticResource InverseBooleanConverter}}">
-                        <TextBox.ToolTip>
-                            <ToolTip Content="Uzak Adresi Gir"/>
-                        </TextBox.ToolTip>
-                    </TextBox>
-                    <TextBlock Text="Uzak cihaz ID'sini girin..."
+                         Text="{Binding RemoteDeviceId, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource ModernTextBox}"
+                         VerticalAlignment="Center"
+                             IsEnabled="{Binding IsConnected, Converter={StaticResource InverseBooleanConverter}}"
+                             KeyDown="RemoteAddressTextBox_KeyDown">
+                    <TextBox.ToolTip>
+                        <ToolTip>
+                            <StackPanel>
+                                <TextBlock Text="Uzak cihaz ID'sini girin" FontWeight="Bold" Margin="0,0,0,5"/>
+                                <TextBlock Text="Örnek: 311819501" Margin="0,0,0,3"/>
+                                <TextBlock Text="veya" Margin="0,0,0,3"/>
+                                <TextBlock Text="311819501@192.168.1.100:5000" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </ToolTip>
+                    </TextBox.ToolTip>
+                </TextBox>
+                    <TextBlock Text="Device ID girin (örn: 311819501 veya 311819501@192.168.1.100:5000)..."
                                Foreground="#64748b"
                                FontSize="13"
                                VerticalAlignment="Center"
@@ -339,55 +348,60 @@
         <Border Grid.Row="2" Background="Transparent" Padding="20,30">
             <StackPanel HorizontalAlignment="Center">
                 <!-- Device ID -->
-                <StackPanel Orientation="Horizontal" 
+                <StackPanel Orientation="Vertical" 
                            HorizontalAlignment="Center" 
                            VerticalAlignment="Center"
                            Margin="0,0,0,20">
-                    <TextBlock Text="Bu çalışma alanı" 
-                               Foreground="#94a3b8" 
-                               FontSize="16"
+                    <!-- Agent Device ID (Ana ID) -->
+                    <StackPanel Orientation="Horizontal" 
+                               HorizontalAlignment="Center" 
                                VerticalAlignment="Center"
-                               Margin="0,0,20,0"/>
-                    <Grid>
-                        <TextBlock x:Name="DeviceIdTextBlock"
-                                   Text="{Binding FormattedDeviceId}" 
-                                   FontSize="56" 
-                                   FontWeight="Bold" 
+                               Margin="0,0,0,10">
+                        <TextBlock Text="Agent Device ID" 
+                                   Foreground="#94a3b8" 
+                                   FontSize="16"
                                    VerticalAlignment="Center"
-                                   MinWidth="300"
-                                   TextAlignment="Center"
-                                   Cursor="Hand"
-                                   MouseLeftButtonDown="DeviceIdTextBlock_MouseLeftButtonDown">
-                            <TextBlock.Foreground>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#00A8FF" Offset="0.0"/>
-                                    <GradientStop Color="#0066FF" Offset="0.5"/>
-                                    <GradientStop Color="#0055FF" Offset="1.0"/>
-                                </LinearGradientBrush>
-                            </TextBlock.Foreground>
-                        </TextBlock>
-                        <!-- Success Indicator -->
-                        <Border x:Name="DeviceIdSuccessIndicator"
-                                Background="#10b981"
-                                CornerRadius="20"
-                                Width="40" Height="40"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Opacity="0"
-                                Visibility="Collapsed">
-                            <Border.RenderTransform>
-                                <ScaleTransform/>
-                            </Border.RenderTransform>
-                            <TextBlock Text="✓" 
-                                       Foreground="White" 
-                                       FontSize="24" 
-                                       FontWeight="Bold"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Border>
-                    </Grid>
-                    <Button x:Name="CopyDeviceIdButton"
-                            Content="📋" 
+                                   Margin="0,0,20,0"/>
+                        <Grid>
+                            <TextBlock x:Name="DeviceIdTextBlock"
+                                       Text="{Binding FormattedDeviceId}" 
+                                       FontSize="56" 
+                                       FontWeight="Bold" 
+                                       VerticalAlignment="Center"
+                                       MinWidth="300"
+                                       TextAlignment="Center"
+                                       Cursor="Hand"
+                                       MouseLeftButtonDown="DeviceIdTextBlock_MouseLeftButtonDown">
+                                <TextBlock.Foreground>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#00A8FF" Offset="0.0"/>
+                                        <GradientStop Color="#0066FF" Offset="0.5"/>
+                                        <GradientStop Color="#0055FF" Offset="1.0"/>
+                                    </LinearGradientBrush>
+                                </TextBlock.Foreground>
+                            </TextBlock>
+                            <!-- Success Indicator -->
+                            <Border x:Name="DeviceIdSuccessIndicator"
+                                    Background="#10b981"
+                                    CornerRadius="20"
+                                    Width="40" Height="40"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Opacity="0"
+                                    Visibility="Collapsed">
+                                <Border.RenderTransform>
+                                    <ScaleTransform/>
+                                </Border.RenderTransform>
+                                <TextBlock Text="✓" 
+                                           Foreground="White" 
+                                           FontSize="24" 
+                                           FontWeight="Bold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                        <Button x:Name="CopyDeviceIdButton"
+                                Content="📋" 
                             Width="36" Height="36" 
                             Background="Transparent" 
                             Foreground="#94a3b8"
@@ -397,6 +411,7 @@
                             Click="CopyDeviceId_Click"
                             ToolTip="Device ID'yi Kopyala"
                             FontSize="20"/>
+                    </StackPanel>
                 </StackPanel>
                 
                 <!-- Password -->
@@ -455,7 +470,7 @@
         </Border>
         
         <!-- Tabs (Removed - Now in Top Bar) -->
-        <Border Grid.Row="2" Background="Transparent" Padding="20,0,20,0" Visibility="Collapsed">
+        <Border Grid.Row="3" Background="Transparent" Padding="20,0,20,0" Visibility="Collapsed">
             <StackPanel Orientation="Horizontal">
                 <Button Content="Haberler" 
                         x:Name="NewsTab"
@@ -819,7 +834,16 @@
                         <Image Source="{Binding RemoteScreenImage}" 
                                Stretch="Uniform" 
                                HorizontalAlignment="Center" 
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Center"
+                               MinWidth="100"
+                               MinHeight="100"/>
+                        <!-- Placeholder text when no image -->
+                        <TextBlock Text="Görüntü bekleniyor..." 
+                                   Foreground="#64748b"
+                                   FontSize="14"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Visibility="{Binding RemoteScreenImage, Converter={StaticResource NullToVisibilityConverter}}"/>
                         <StackPanel HorizontalAlignment="Right" 
                                     VerticalAlignment="Top" 
                                     Margin="10">

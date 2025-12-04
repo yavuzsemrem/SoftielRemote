@@ -25,15 +25,40 @@ public class TcpStreamClient : ITcpStreamClient
     {
         try
         {
+            System.Diagnostics.Debug.WriteLine($"🔵 TcpStreamClient.ConnectAsync başlatılıyor: {host}:{port}");
             _tcpClient = new TcpClient();
-            await _tcpClient.ConnectAsync(host, port);
+            
+            // Timeout ayarla (10 saniye)
+            var connectTask = _tcpClient.ConnectAsync(host, port);
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(10));
+            var completedTask = await Task.WhenAny(connectTask, timeoutTask);
+            
+            if (completedTask == timeoutTask)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ TCP bağlantı timeout: {host}:{port}");
+                Disconnect();
+                return false;
+            }
+            
+            await connectTask;
             _stream = _tcpClient.GetStream();
             
+            System.Diagnostics.Debug.WriteLine($"✅ Agent'a bağlanıldı: {host}:{port}");
             _logger?.LogInformation("Agent'a bağlanıldı: {Host}:{Port}", host, port);
             return true;
         }
+        catch (System.Net.Sockets.SocketException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"❌ SocketException: {ex.SocketErrorCode} - {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"❌ Host: {host}, Port: {port}");
+            _logger?.LogError(ex, "Bağlantı hatası: {Host}:{Port}", host, port);
+            Disconnect();
+            return false;
+        }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"❌ TCP bağlantı exception: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"❌ Host: {host}, Port: {port}");
             _logger?.LogError(ex, "Bağlantı hatası: {Host}:{Port}", host, port);
             Disconnect();
             return false;
@@ -44,6 +69,7 @@ public class TcpStreamClient : ITcpStreamClient
     {
         if (_stream == null || !IsConnected)
         {
+            System.Diagnostics.Debug.WriteLine("⚠️ TcpStreamClient: Stream null veya bağlı değil");
             return null;
         }
 
@@ -53,12 +79,19 @@ public class TcpStreamClient : ITcpStreamClient
             var lengthBytes = new byte[4];
             var bytesRead = await _stream.ReadAsync(lengthBytes, 0, 4, cancellationToken);
             
+            System.Diagnostics.Debug.WriteLine($"🔵 TcpStreamClient: Length bytes okundu: {bytesRead}/4");
+            
             if (bytesRead != 4)
             {
+                if (bytesRead == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("⚠️ TcpStreamClient: Bağlantı kapatıldı (0 byte okundu)");
+                }
                 return null;
             }
 
             var dataLength = BitConverter.ToInt32(lengthBytes, 0);
+            System.Diagnostics.Debug.WriteLine($"🔵 TcpStreamClient: Data uzunluğu: {dataLength} bytes");
             
             // Data'yı oku
             var data = new byte[dataLength];
@@ -68,19 +101,34 @@ public class TcpStreamClient : ITcpStreamClient
                 var read = await _stream.ReadAsync(data, totalRead, dataLength - totalRead, cancellationToken);
                 if (read == 0)
                 {
+                    System.Diagnostics.Debug.WriteLine($"⚠️ TcpStreamClient: Data okuma sırasında bağlantı kapatıldı ({totalRead}/{dataLength} okundu)");
                     return null;
                 }
                 totalRead += read;
             }
 
+            System.Diagnostics.Debug.WriteLine($"✅ TcpStreamClient: Tüm data okundu: {totalRead} bytes");
+
             // JSON'u deserialize et
             var json = System.Text.Encoding.UTF8.GetString(data);
+            System.Diagnostics.Debug.WriteLine($"🔵 TcpStreamClient: JSON uzunluğu: {json.Length} karakter");
             var frame = JsonSerializer.Deserialize<RemoteFrameMessage>(json);
+            
+            if (frame == null)
+            {
+                System.Diagnostics.Debug.WriteLine("❌ TcpStreamClient: Frame deserialize edilemedi (null)");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"✅ TcpStreamClient: Frame deserialize edildi: Width={frame.Width}, Height={frame.Height}");
+            }
             
             return frame;
         }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"❌ TcpStreamClient exception: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"❌ StackTrace: {ex.StackTrace}");
             _logger?.LogError(ex, "Frame alma hatası");
             return null;
         }

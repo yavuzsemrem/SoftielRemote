@@ -32,41 +32,55 @@ Bu proje; AnyDesk / TeamViewer benzeri, **ID ile bağlanılan**, **ekran paylaş
 Çok bileşenli ama mantıksal olarak basit bir mimari kullanıyoruz:
 
 1. **SoftielRemote.Backend**
-   - ASP.NET Core tabanlı bir **Backend API**.
+   - ASP.NET Core tabanlı bir **Backend API** (Production-ready).
    - Görevleri:
-     - Agent’ların kayıt olması (Register Agent)
-     - Agent online/online değil durumunu takip etmek
-     - Controller’ın “bu ID’ye bağlanmak istiyorum” isteğini almak
-     - Controller ile Agent arasında **signaling** yapmak (WebSocket / SignalR)
-     - Basit kimlik doğrulama (ileride kullanıcı hesabı vs. için genişleyebilir)
+     - Agent'ların kayıt olması (Register Agent) - PostgreSQL'de saklama
+     - Agent online/offline durumunu takip etmek (Redis cache)
+     - Controller'ın "bu ID'ye bağlanmak istiyorum" isteğini almak
+     - Controller ile Agent arasında **signaling** yapmak (SignalR WebSocket)
+     - WebRTC signaling (ICE candidate exchange, offer/answer)
+     - JWT tabanlı kimlik doğrulama
+     - Rate limiting ve güvenlik kontrolleri
+     - Health checks ve monitoring endpoints
 
 2. **SoftielRemote.Agent (Windows Service / Tray App)**
-   - Uzak bilgisayarda sürekli çalışan program.
+   - Uzak bilgisayarda sürekli çalışan program (Production-ready).
    - Görevleri:
-     - Device ID üretmek ve Backend’e kayıt olmak
-     - Backend’den gelen “Controller bağlanmak istiyor” sinyallerini dinlemek
-     - Ekran görüntüsünü almak (screen capture)
-     - Ekranı sıkıştırılmış formatta Controller’a göndermek
-     - Controller’dan gelen mouse/klavye komutlarını işletim sistemine enjekte etmek
+     - Device ID üretmek ve Backend'e kayıt olmak (PostgreSQL)
+     - Backend'den gelen "Controller bağlanmak istiyor" sinyallerini dinlemek (SignalR)
+     - Ekran görüntüsünü almak (Windows Graphics Capture API veya DirectX Desktop Duplication)
+     - Ekranı H.264/H.265 formatında encode etmek (FFmpeg + hardware encoding)
+     - WebRTC üzerinden video stream'i Controller'a göndermek (P2P)
+     - Controller'dan gelen mouse/klavye komutlarını işletim sistemine enjekte etmek (SendInput API)
+     - Connection approval dialog göstermek
    - Çalışma şekli:
-     - Servis veya background console + tray UI ile olabilir.
-     - Agent çalışıyorsa, UI kapansa bile uzak bağlantı kurulabilmeli.
+     - Windows Service olarak çalışır (arka planda)
+     - Tray icon ile kullanıcı etkileşimi
+     - Agent çalışıyorsa, UI kapansa bile uzak bağlantı kurulabilmeli
+     - Auto-start on boot
 
 3. **SoftielRemote.App (Desktop UI – Controller & Client UI)**
-   - Kullanıcının gördüğü ana uygulama.
+   - Kullanıcının gördüğü ana uygulama (Production-ready WPF).
    - Tek EXE, içinde iki mod var:
-     - **Allow Access (Client Modu)** → Kendi ID’sini gösterir, gelen bağlantıyı kabul/ret eder.
-     - **Remote Support (Controller Modu)** → Başka bir ID’ye bağlanır, uzak ekranı görür, kontrol eder.
+     - **Allow Access (Client Modu)** → Kendi ID'sini gösterir, gelen bağlantıyı kabul/ret eder.
+     - **Remote Support (Controller Modu)** → Başka bir ID'ye bağlanır, uzak ekranı görür, kontrol eder.
    - Görevleri:
-     - Backend ile haberleşerek istenen ID’ye bağlantı talebi göndermek
-     - Bağlantı kabul edildiğinde Agent ile **P2P veya relay** üzerinden ekran/video + input iletişimi kurmak
-     - Remote oturum sırasında ekran görüntüsünü render etmek ve kullanıcı inputlarını Agent’a iletmek.
+     - Backend ile haberleşerek istenen ID'ye bağlantı talebi göndermek (REST API + SignalR)
+     - Bağlantı kabul edildiğinde Agent ile **WebRTC P2P** üzerinden video + input iletişimi kurmak
+     - STUN/TURN sunucuları ile NAT traversal
+     - Remote oturum sırasında WebRTC video stream'ini render etmek
+     - Kullanıcı inputlarını (mouse/klavye) WebRTC data channel üzerinden Agent'a iletmek
+     - Connection quality monitoring (latency, bitrate, FPS)
+     - Automatic reconnection ve error recovery
 
 4. **Core Library (SoftielRemote.Core)**
    - Ortak kullanılan tipler ve protokoller:
-     - DTO’lar (AgentRegistrationRequest, ConnectionRequest, RemoteFrame, RemoteInputEvent vb.)
+     - DTO'lar (AgentRegistrationRequest, ConnectionRequest, WebRTCSignalingMessage, RemoteInputEvent vb.)
+     - WebRTC signaling mesajları (ICE candidates, SDP offer/answer)
      - Basic config, constantlar
-     - Protokol mesaj modelleri (JSON olarak taşınacak yapılar)
+     - Enums (ConnectionStatus, QualityLevel, PermissionLevel vb.)
+     - Exception types ve error codes
+     - Validation attributes
 
 ---
 
@@ -116,61 +130,119 @@ Lütfen aşağıdaki solution yapısını kullan:
 
 ---
 
-## 4. Kullanılacak Teknolojiler
+## 4. Kullanılacak Teknolojiler (Production-Ready & Ücretsiz)
+
+**ÖNEMLİ:** Tüm teknolojiler production-ready ve tamamen ücretsiz olmalı. Ticari lisans gerektiren hiçbir teknoloji kullanılmayacak.
 
 ### Backend (SoftielRemote.Backend)
 - **Dil / Framework:**
   - C#, .NET 8
-  - ASP.NET Core Minimal API veya klasik Controller tabanlı API (Controller tercih edelim, daha okunaklı)
+  - ASP.NET Core Controller tabanlı API (RESTful endpoints)
+  - **Middleware:**
+    - Rate limiting (ASP.NET Core built-in veya AspNetCoreRateLimit)
+    - CORS yapılandırması
+    - Request/Response logging
 - **Gerçek zamanlı iletişim:**
-  - İlk aşamada **SignalR** (WebSocket fallback’li)
-  - Görev: sadece signaling + connection state; video/data stream’i için ayrıca kanal olabilir.
-- **Veritabanı (İlk Faz):**
-  - İlk MVP’de **in-memory store** veya basit bir **LiteDB / Sqlite** ile ID–connection tracking yapılabilir.
-  - Genişlemeye açık olsun; repository pattern ile soyutla.
-- **Kimlik Doğrulama:**
-  - İlk fazda zorunlu değil.
-  - İleride JWT / API key destekli hale getir.
+  - **SignalR** (WebSocket fallback’li) - Signaling ve connection state için
+  - Görev: sadece signaling + connection state; video/data stream WebRTC üzerinden
+- **Veritabanı:**
+  - **PostgreSQL** (ücretsiz, açık kaynak, production-ready)
+  - Entity Framework Core (Code First migrations)
+  - Repository pattern ile soyutla
+  - Connection pooling yapılandırması
+- **Cache & State Management:**
+  - **Redis** (ücretsiz, açık kaynak) - Distributed cache ve session state için
+  - Agent online/offline durumu Redis'te tutulacak
+  - Connection request'ler geçici olarak Redis'te saklanacak
+- **Kimlik Doğrulama & Güvenlik:**
+  - **JWT (JSON Web Tokens)** - Authentication için (System.IdentityModel.Tokens.Jwt)
+  - **TLS/SSL** - Tüm iletişim HTTPS üzerinden (Let's Encrypt ile ücretsiz sertifika)
+  - Password hashing: BCrypt veya ASP.NET Core Identity PasswordHasher
+  - API key desteği (ileride)
+- **Monitoring & Logging:**
+  - **Serilog** (ücretsiz, açık kaynak) - Structured logging
+  - File sink + Console sink
+  - İleride: Seq (ücretsiz tier) veya Prometheus + Grafana entegrasyonu
+  - Health checks (ASP.NET Core Health Checks)
+- **Deployment:**
+  - **Nginx** (ücretsiz) - Reverse proxy ve load balancer
+  - Docker containerization (opsiyonel, ücretsiz)
+  - Systemd service (Linux) veya Windows Service
 
 ### Agent (SoftielRemote.Agent)
 - **Dil / Framework:**
-  - C#, .NET 8 Console / Worker Service
-  - Windows’tan işe başla (Win32 API ile ekran ve input kontrolü).
+  - C#, .NET 8 Worker Service veya Windows Service
+  - Windows'tan işe başla (Win32 API ile ekran ve input kontrolü)
 - **Ekran Yakalama:**
-  - GDI+ veya DirectX tabanlı ekran yakalama (Cursor’dan optimize, düşük overhead’li bir çözüm istemesini bekle).
-  - Çıktıyı:
-    - Hızlıca encode edilip (ör. PNG/JPEG sıkıştırma, ileride H.264) parça parça gönder.
-- **Video / Frame Gönderimi:**
-  - İlk versiyonda:
-    - Basit bir mekanizma: TCP üzerinden sıkıştırılmış görüntü frame’leri (FPS 10–15).
-  - Uzun vadede:
-    - WebRTC veya özel UDP protokolüne evrilebilir.
+  - **Windows Graphics Capture API** (Windows 10+, ücretsiz, modern ve optimize)
+  - Alternatif: **DirectX Desktop Duplication API** (daha düşük overhead, Windows 8+)
+  - GDI+ kullanılmayacak (yavaş ve eski)
+  - Multi-monitor desteği için tüm ekranları tespit et
+- **Video Encoding:**
+  - **FFmpeg** (ücretsiz, açık kaynak) - H.264/H.265 encoding için
+  - **Hardware Encoding (öncelikli):**
+    - NVENC (NVIDIA GPU varsa)
+    - Intel QuickSync (Intel GPU varsa)
+    - AMD VCE (AMD GPU varsa)
+  - Software encoding fallback (CPU tabanlı, daha yavaş)
+  - Adaptive bitrate: Kalite ayarına göre bitrate ayarlama
+  - Frame differencing: Sadece değişen bölgeleri gönder (delta compression)
+- **Network Protocol:**
+  - **WebRTC** (ücretsiz, açık kaynak) - P2P video/audio/data streaming için
+  - **SIPSorcery** (ücretsiz, C# WebRTC library) veya **Pion WebRTC** wrapper
+  - STUN/TURN sunucuları ile NAT traversal
+  - Fallback: TURN relay sunucusu (Coturn - ücretsiz)
+  - UDP tabanlı, düşük latency
+  - Automatic reconnection ve connection state management
 - **Input Injection:**
-  - Win32 API ile:
-    - mouse_event / SendInput vb. kullanarak mouse hareket/tıklama
-    - klavye tuş basımı (key down/up)
-  - Güvenlik açısından:
-    - Bağlantı onayı olmadan işlem yapma.
-    - İleride izin/verme seviyelerini eklemek (sadece görüntü, görüntü + kontrol vb.).
+  - Win32 API: **SendInput** (mouse_event deprecated)
+  - Mouse: hareket, tıklama, scroll, drag
+  - Klavye: tuş basımı, modifier keys (Ctrl, Alt, Shift)
+  - Güvenlik:
+    - Bağlantı onayı olmadan işlem yapma
+    - İzin seviyeleri: sadece görüntü, görüntü + kontrol
+    - Input event'leri loglama (opsiyonel, güvenlik için)
 
 ### Desktop UI (SoftielRemote.App)
 - **Dil / Framework:**
   - C#, .NET 8
-  - WPF (MVVM)
+  - **WPF** (MVVM pattern)
+  - CommunityToolkit.Mvvm veya ReactiveUI (MVVM framework)
 - **UI Temel Özellikler:**
   - Ana ekran:
-    - Sol tarafta “Your ID”, “Password”
-    - Sağ tarafta “Remote ID” input’u ve “Connect” butonu
+    - Sol tarafta "Your ID", "Password" (otomatik generate)
+    - Sağ tarafta "Remote ID" input'u ve "Connect" butonu
+    - Connection status indicator
   - Bağlantı penceresi:
-    - Ortada uzak ekranı gösteren bir kontrol
+    - Ortada uzak ekranı gösteren bir kontrol (WebRTC video element)
     - Üst toolbarda:
       - Disconnect
-      - Quality (Low / Medium / High)
-      - Fullscreen (ileride)
+      - Quality (Low / Medium / High / Auto)
+      - Fullscreen toggle
+      - Connection info (latency, bitrate, FPS)
 - **Bağlantı Yönetimi:**
   - Backend API Client (HttpClient + SignalR HubConnection)
-  - Agent ile data channel:
-    - İlk aşamada basit TCP stream’i; UI sadece gelen frame’leri gösterir.
+  - **WebRTC Client** - Agent ile P2P bağlantı için
+  - Automatic reconnection logic
+  - Connection quality monitoring
+- **Video Rendering:**
+  - WebRTC video stream'i render etmek için MediaElement veya özel kontrol
+  - Hardware acceleration desteği (GPU decoding)
+
+### Infrastructure & DevOps (Ücretsiz Araçlar)
+- **STUN/TURN Server:**
+  - **Coturn** (ücretsiz, açık kaynak) - NAT traversal için
+  - Alternatif: Cloudflare Turn (ücretsiz tier) veya Twilio STUN (ücretsiz tier)
+- **SSL/TLS Sertifikaları:**
+  - **Let's Encrypt** (ücretsiz, otomatik yenileme)
+  - Certbot ile otomatik sertifika yönetimi
+- **Version Control:**
+  - Git (ücretsiz)
+- **CI/CD:**
+  - GitHub Actions (ücretsiz tier) veya GitLab CI (ücretsiz)
+- **Monitoring (Opsiyonel, ileride):**
+  - Prometheus + Grafana (ücretsiz, açık kaynak)
+  - Application Insights (Azure ücretsiz tier) veya alternatif
 
 ### Ortak Kurallar
 - Kod dili: **C#** (Backend, Agent, App)
@@ -185,32 +257,106 @@ Lütfen aşağıdaki solution yapısını kullan:
 
 ---
 
-## 5. Geliştirme Fazları (Cursor’a Rehber)
+## 5. Geliştirme Fazları (Production-Ready Yaklaşım)
 
-Cursor’dan isterken aşağıdaki faz mantığına uy:
+Cursor'dan isterken aşağıdaki faz mantığına uy. Her faz production-ready olmalı.
 
-### Faz 1 – Aynı makinede / LAN’de Çalışan Basit Prototip
-- Backend’de:
-  - Basit register endpoint: `/api/agents/register`
-  - Basit connection request endpoint: `/api/connections/request`
-- Agent:
-  - Dummy screen capture (küçük resolution, örn. 800x600)
-  - Belirli aralıklarla (ör. 200 ms) frame üreterek Controller’a yollayacak.
-- App:
-  - ID gösteren alanlar
-  - “Connect to ID” butonu
-  - Bağlanınca ekrana image stream’i paint eden kontrol.
+### Faz 1 – Temel Altyapı ve Prototip (MVP)
+- **Backend:**
+  - PostgreSQL veritabanı kurulumu ve migration'lar
+  - Redis cache kurulumu
+  - Agent register endpoint: `/api/agents/register`
+  - Connection request endpoint: `/api/connections/request`
+  - SignalR Hub (ConnectionHub) - Signaling için
+  - JWT authentication temel yapısı
+  - Serilog logging yapılandırması
+  - Health checks
+- **Agent:**
+  - Windows Graphics Capture API ile ekran yakalama
+  - FFmpeg entegrasyonu (H.264 encoding)
+  - Hardware encoding desteği (NVENC/QuickSync/VCE)
+  - WebRTC peer connection kurulumu
+  - Backend'e kayıt ve SignalR bağlantısı
+  - Input injection (SendInput API)
+- **App:**
+  - Ana ekran UI (ID gösterimi, bağlantı input'u)
+  - WebRTC client entegrasyonu
+  - Video rendering kontrolü
+  - SignalR HubConnection ile Backend bağlantısı
+- **Infrastructure:**
+  - STUN/TURN sunucusu kurulumu (Coturn)
+  - Temel SSL/TLS yapılandırması
 
-### Faz 2 – Gerçek Uzak Bağlantı (NAT Arkasında Olmasa da İnternet Üzerinde)
-- SignalR ile signaling + connection state
-- TCP üzerinden frame ve input iletimi
-- Basit kalite ayarı (frame boyutu + FPS düşürme)
+### Faz 2 – Production-Ready Network ve Optimizasyon
+- **Backend:**
+  - Rate limiting implementasyonu
+  - Connection state management (Redis)
+  - Error handling ve retry logic
+  - API documentation (Swagger/OpenAPI)
+  - Request validation
+- **Agent:**
+  - Adaptive bitrate (kalite ayarına göre)
+  - Frame differencing (delta compression)
+  - Connection quality monitoring
+  - Automatic reconnection
+  - Multi-monitor desteği
+- **App:**
+  - Quality selector (Low/Medium/High/Auto)
+  - Connection info display (latency, bitrate, FPS)
+  - Fullscreen mode
+  - Automatic reconnection UI
+- **Infrastructure:**
+  - Nginx reverse proxy yapılandırması
+  - Let's Encrypt SSL sertifikası
+  - Load balancing hazırlığı
 
-### Faz 3 – Güvenlik + UX Geliştirmeleri
-- Bağlantı onay ekranı
-- Parola üretimi ve kontrolü
-- Bağlantı loglama
-- Tray ikon, auto start vb.
+### Faz 3 – Güvenlik ve Production Features
+- **Backend:**
+  - JWT token refresh mechanism
+  - Password generation ve validation
+  - Connection request approval flow
+  - Audit logging (bağlantı logları)
+  - Rate limiting per IP/user
+  - CORS yapılandırması
+- **Agent:**
+  - Connection approval dialog
+  - Permission levels (view only, full control)
+  - Input event logging (opsiyonel)
+  - Windows Service olarak çalışma
+  - Tray icon ve system integration
+  - Auto-start on boot
+- **App:**
+  - Connection request approval UI
+  - Password input ve validation
+  - Session management
+  - Error handling ve user-friendly messages
+- **Security:**
+  - End-to-end encryption (WebRTC zaten encrypted)
+  - TLS 1.3 zorunlu
+  - Input validation ve sanitization
+  - SQL injection koruması (EF Core ile otomatik)
+
+### Faz 4 – Monitoring, Scaling ve Polish
+- **Backend:**
+  - Prometheus metrics export
+  - Grafana dashboard (opsiyonel)
+  - Performance monitoring
+  - Database query optimization
+  - Connection pooling tuning
+- **Agent & App:**
+  - Performance profiling ve optimization
+  - Memory leak detection ve fix
+  - Crash reporting
+- **Infrastructure:**
+  - Docker containerization (opsiyonel)
+  - CI/CD pipeline (GitHub Actions)
+  - Automated testing
+  - Backup stratejisi (PostgreSQL)
+- **UX:**
+  - Loading states ve progress indicators
+  - Error recovery UI
+  - Settings/configuration UI
+  - About/help dialogs
 
 ---
 
@@ -225,8 +371,64 @@ Cursor’dan isterken aşağıdaki faz mantığına uy:
   - Sonra Agent’in iskeletini oluştur.
   - Sonra App için MVVM tabanlı basit UI ekranlarını oluştur.
 - Mümkün olduğunca:
-  - Magic string’lerden kaçın.
+  - Magic string'lerden kaçın.
   - Config değerlerini `appsettings.json` veya `Settings` sınıflarına taşı.
 - Türkçe açıklama / yorumlar serbest, ama kod isimleri İngilizce olsun.
+
+---
+
+## 7. Production Deployment Checklist
+
+Production'a geçmeden önce aşağıdaki maddelerin tamamlanmış olması gerekir:
+
+### Backend Deployment
+- [ ] PostgreSQL veritabanı kurulumu ve migration'lar çalıştırıldı
+- [ ] Redis cache kurulumu ve bağlantı test edildi
+- [ ] SSL/TLS sertifikası (Let's Encrypt) kuruldu ve otomatik yenileme yapılandırıldı
+- [ ] Nginx reverse proxy yapılandırıldı
+- [ ] Rate limiting aktif ve test edildi
+- [ ] Health checks endpoint'leri çalışıyor
+- [ ] Logging yapılandırması (Serilog) aktif
+- [ ] Environment variables (connection strings, secrets) güvenli şekilde yönetiliyor
+- [ ] CORS policy production için yapılandırıldı
+- [ ] Database backup stratejisi hazır
+
+### Agent Deployment
+- [ ] Windows Service olarak kurulum script'i hazır
+- [ ] Auto-start on boot yapılandırıldı
+- [ ] Tray icon ve system integration çalışıyor
+- [ ] FFmpeg binary'si dahil edildi veya PATH'te mevcut
+- [ ] Hardware encoding test edildi (NVENC/QuickSync/VCE)
+- [ ] Connection approval dialog test edildi
+- [ ] Input injection güvenlik kontrolleri aktif
+
+### App Deployment
+- [ ] WebRTC client entegrasyonu test edildi
+- [ ] STUN/TURN sunucu bağlantıları yapılandırıldı
+- [ ] Automatic reconnection test edildi
+- [ ] Error handling ve user-friendly messages eklendi
+- [ ] Performance test edildi (memory leaks, CPU usage)
+
+### Infrastructure
+- [ ] STUN/TURN sunucusu (Coturn) kuruldu ve test edildi
+- [ ] Firewall kuralları yapılandırıldı (port açılışları)
+- [ ] Monitoring ve alerting yapılandırıldı (opsiyonel)
+- [ ] Load balancing hazırlığı yapıldı (Nginx)
+- [ ] Backup ve disaster recovery planı hazır
+
+### Security
+- [ ] TLS 1.3 zorunlu hale getirildi
+- [ ] JWT token expiration ve refresh mekanizması çalışıyor
+- [ ] Password hashing (BCrypt) aktif
+- [ ] SQL injection koruması (EF Core) aktif
+- [ ] Input validation tüm endpoint'lerde mevcut
+- [ ] Rate limiting per IP/user aktif
+
+### Testing
+- [ ] Unit testler yazıldı (kritik business logic için)
+- [ ] Integration testler (Backend-Agent-App) yapıldı
+- [ ] NAT traversal test edildi (farklı network'lerde)
+- [ ] Load testing yapıldı (çoklu eşzamanlı bağlantı)
+- [ ] Error scenarios test edildi (network kesintisi, crash recovery)
 
 ---

@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using SoftielRemote.Core.Messages;

@@ -5,6 +5,7 @@ C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net
 C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.AssemblyInfoInputs.cache
 C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.AssemblyInfo.cs
 C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.csproj.CoreCompileInputs.cache
+C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.sourcelink.json
 C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.dll
 C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\refint\SoftielRemote.Core.dll
 C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.Core\obj\Debug\net8.0\SoftielRemote.Core.pdb

@@ -18,6 +18,11 @@ public enum QualityLevel
     /// <summary>
     /// Yüksek kalite - Yüksek çözünürlük, daha fazla bant genişliği.
     /// </summary>
-    High = 2
+    High = 2,
+
+    /// <summary>
+    /// Otomatik kalite - Ağ durumuna göre otomatik ayarlanır.
+    /// </summary>
+    Auto = 3
 }
 

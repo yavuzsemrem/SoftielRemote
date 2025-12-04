@@ -14,6 +14,21 @@ public class InMemoryAgentRepository : IAgentRepository
     {
         lock (_lock)
         {
+            // Eğer Agent zaten varsa, IP adresini koru (App kayıt olurken IP göndermeyebilir)
+            if (_agents.TryGetValue(agent.DeviceId, out var existingAgent))
+            {
+                // Yeni kayıtta IP adresi yoksa, mevcut IP'yi koru
+                if (string.IsNullOrEmpty(agent.IpAddress) && !string.IsNullOrEmpty(existingAgent.IpAddress))
+                {
+                    agent.IpAddress = existingAgent.IpAddress;
+                }
+                // Yeni kayıtta TCP port yoksa, mevcut port'u koru
+                if (agent.TcpPort == 0 && existingAgent.TcpPort > 0)
+                {
+                    agent.TcpPort = existingAgent.TcpPort;
+                }
+            }
+            
             _agents[agent.DeviceId] = agent;
             return Task.FromResult(agent);
         }
@@ -36,6 +51,14 @@ public class InMemoryAgentRepository : IAgentRepository
         }
     }
 
+    public Task<IEnumerable<AgentInfo>> GetAllAgentsAsync()
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_agents.Values.AsEnumerable());
+        }
+    }
+
     public Task UpdateConnectionIdAsync(string deviceId, string? connectionId)
     {
         lock (_lock)
@@ -49,13 +72,19 @@ public class InMemoryAgentRepository : IAgentRepository
         return Task.CompletedTask;
     }
 
-    public Task UpdateLastSeenAsync(string deviceId)
+    public Task UpdateLastSeenAsync(string deviceId, string? ipAddress = null)
     {
         lock (_lock)
         {
             if (_agents.TryGetValue(deviceId, out var agent))
             {
                 agent.LastSeen = DateTime.UtcNow;
+                
+                // IpAddress güncelle (varsa ve null değilse)
+                if (!string.IsNullOrEmpty(ipAddress))
+                {
+                    agent.IpAddress = ipAddress;
+                }
             }
         }
         return Task.CompletedTask;

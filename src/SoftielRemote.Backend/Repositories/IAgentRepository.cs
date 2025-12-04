@@ -23,6 +23,11 @@ public interface IAgentRepository
     Task<IEnumerable<AgentInfo>> GetOnlineAgentsAsync();
 
     /// <summary>
+    /// Tüm Agent'ları getirir (debug için).
+    /// </summary>
+    Task<IEnumerable<AgentInfo>> GetAllAgentsAsync();
+
+    /// <summary>
     /// Agent'ın connection ID'sini günceller.
     /// </summary>
     Task UpdateConnectionIdAsync(string deviceId, string? connectionId);
@@ -30,6 +35,6 @@ public interface IAgentRepository
     /// <summary>
     /// Agent'ın heartbeat'ini günceller.
     /// </summary>
-    Task UpdateLastSeenAsync(string deviceId);
+    Task UpdateLastSeenAsync(string deviceId, string? ipAddress = null);
 }
 

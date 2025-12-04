@@ -34,5 +34,20 @@ public class AgentConfig
     /// TCP server port (Controller'dan gelen bağlantılar için).
     /// </summary>
     public int TcpServerPort { get; set; } = 8888;
+
+    /// <summary>
+    /// TURN sunucu URL'i (WebRTC için, opsiyonel).
+    /// </summary>
+    public string? TurnServerUrl { get; set; }
+
+    /// <summary>
+    /// Video encoding kalite seviyesi (FFmpeg H.264 encoding için).
+    /// </summary>
+    public Core.Enums.QualityLevel QualityLevel { get; set; } = Core.Enums.QualityLevel.Medium;
+
+    /// <summary>
+    /// H.264 encoding kullanılsın mı? (false ise JPEG kullanılır).
+    /// </summary>
+    public bool UseH264Encoding { get; set; } = false; // Şimdilik false, FFmpeg kurulumu sonrası true yapılabilir
 }
 

@@ -21,5 +21,15 @@ public interface IAgentService
     /// Agent bilgilerini getirir.
     /// </summary>
     Task<Models.AgentInfo?> GetAgentInfoAsync(string deviceId);
+
+    /// <summary>
+    /// Agent'ın LastSeen zamanını günceller (heartbeat).
+    /// </summary>
+    Task UpdateLastSeenAsync(string deviceId, string? ipAddress = null);
+
+    /// <summary>
+    /// Tüm Agent'ları getirir (debug için).
+    /// </summary>
+    Task<IEnumerable<Models.AgentInfo>> GetAllAgentsAsync();
 }
 

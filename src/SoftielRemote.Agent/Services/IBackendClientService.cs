@@ -15,6 +15,16 @@ public interface IBackendClientService
     /// <summary>
     /// Agent'ın online durumunu Backend'e bildirir (heartbeat).
     /// </summary>
-    Task<bool> SendHeartbeatAsync(string deviceId);
+    Task<bool> SendHeartbeatAsync(string deviceId, string? ipAddress = null);
+
+    /// <summary>
+    /// Bekleyen bağlantı isteklerini kontrol eder.
+    /// </summary>
+    Task<PendingConnectionRequest?> GetPendingConnectionRequestAsync(string deviceId);
+
+    /// <summary>
+    /// Bağlantı isteğine yanıt verir (onay/red).
+    /// </summary>
+    Task<bool> RespondToConnectionRequestAsync(string connectionId, bool accepted);
 }
 

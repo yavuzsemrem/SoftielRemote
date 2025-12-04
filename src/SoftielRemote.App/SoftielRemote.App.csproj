@@ -8,6 +8,9 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="System.Net.Http.Json" Version="10.0.0" />
+    <PackageReference Include="SIPSorcery" Version="6.0.6" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.11" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -19,7 +22,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="src\img\transparent.png">
+    <Resource Include="src\img\transparent.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

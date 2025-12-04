@@ -10,11 +10,11 @@ none
 false
 TRACE;DEBUG;NET;NET8_0;NETCOREAPP
 C:\Users\Yavuz\Desktop\Github\SoftielRemote\src\SoftielRemote.App\App.xaml
-11407045341
-125757608
-12-95469735
-203204596983
-MainWindow.xaml;
+5-1362277638
+11413424753
+21-576344081
+221-2082210114
+Controls\WebRTCVideoControl.xaml;MainWindow.xaml;Views\BackendSettingsDialog.xaml;Views\ConnectionRequestDialog.xaml;Views\RemoteConnectionWindow.xaml;
 
 False
 

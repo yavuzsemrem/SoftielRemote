@@ -52,9 +52,10 @@ public class TcpStreamServer
     /// </summary>
     public async Task SendFrameAsync(RemoteFrameMessage frame, CancellationToken cancellationToken = default)
     {
-        if (_currentStream == null || !_currentClient?.Connected == true)
+        if (_currentStream == null || _currentClient?.Connected != true)
         {
-            _logger.LogWarning("Client bağlı değil, frame gönderilemedi");
+            _logger.LogWarning("Client bağlı değil, frame gönderilemedi. Stream={Stream}, Connected={Connected}", 
+                _currentStream != null, _currentClient?.Connected ?? false);
             return;
         }
 
@@ -64,6 +65,9 @@ public class TcpStreamServer
             var json = JsonSerializer.Serialize(frame);
             var data = System.Text.Encoding.UTF8.GetBytes(json);
             
+            _logger.LogInformation("🔵 Frame gönderiliyor: Width={Width}, Height={Height}, DataLength={DataLength}, JsonLength={JsonLength}", 
+                frame.Width, frame.Height, frame.ImageData?.Length ?? 0, json.Length);
+            
             // Önce data uzunluğunu gönder (4 byte)
             var lengthBytes = BitConverter.GetBytes(data.Length);
             await _currentStream.WriteAsync(lengthBytes, 0, 4, cancellationToken);
@@ -71,6 +75,8 @@ public class TcpStreamServer
             // Sonra data'yı gönder
             await _currentStream.WriteAsync(data, 0, data.Length, cancellationToken);
             await _currentStream.FlushAsync(cancellationToken);
+            
+            _logger.LogInformation("✅ Frame gönderildi: {DataLength} bytes", data.Length);
         }
         catch (Exception ex)
         {

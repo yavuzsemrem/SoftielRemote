@@ -36,14 +36,32 @@ public class AgentInfo
     public string? IpAddress { get; set; }
 
     /// <summary>
-    /// Agent'ın TCP port numarası.
+    /// Agent'ın TCP port numarası. App için null olabilir (App TCP server çalıştırmaz).
     /// </summary>
-    public int TcpPort { get; set; } = 8888;
+    public int? TcpPort { get; set; } = 8888;
 
     /// <summary>
     /// Agent'ın online olup olmadığı.
+    /// Faz 1: LastSeen'e göre kontrol (5 dakika içinde heartbeat geldiyse online)
+    /// Faz 2: SignalR ConnectionId ile kontrol edilecek
     /// </summary>
-    public bool IsOnline => !string.IsNullOrEmpty(ConnectionId) && 
-                           (DateTime.UtcNow - LastSeen).TotalMinutes < 5;
+    public bool IsOnline
+    {
+        get
+        {
+            // Faz 2'de SignalR kullanıldığında ConnectionId kontrolü yapılacak
+            if (!string.IsNullOrEmpty(ConnectionId))
+            {
+                return (DateTime.UtcNow - LastSeen).TotalMinutes < 5;
+            }
+            
+            // Faz 1: LastSeen'e göre kontrol
+            // Agent kayıt olduğunda veya heartbeat gönderdiğinde LastSeen güncellenir
+            // 5 dakika içinde heartbeat geldiyse online sayılır (30 saniyede bir gönderiliyor)
+            // Daha esnek bir süre kullanıyoruz çünkü network gecikmeleri olabilir
+            var minutesSinceLastSeen = (DateTime.UtcNow - LastSeen).TotalMinutes;
+            return minutesSinceLastSeen < 5;
+        }
+    }
 }
 

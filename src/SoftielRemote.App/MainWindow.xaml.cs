@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Runtime.InteropServices;
 using SoftielRemote.App.Services;
 using SoftielRemote.App.ViewModels;
+using SoftielRemote.Core.Utils;
 
 namespace SoftielRemote.App;
 
@@ -21,20 +22,119 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
             
-            // Dependency Injection için service'leri oluştur
-            var backendClient = new BackendClientService("http://localhost:5056");
+            // Backend URL'ini appsettings.json'dan oku
+            var configuredBackendUrl = ReadBackendUrlFromConfig();
             
-            // TcpStreamClient oluştur (logger optional, null geçilebilir)
+            // Loaded event'inde async olarak backend URL'ini çöz
+            Loaded += async (s, e) =>
+            {
+                await ResolveAndInitializeBackendAsync(configuredBackendUrl);
+            };
+            
+            // Geçici olarak varsayılan URL ile başlat (async çözümleme tamamlanana kadar)
+            var tempBackendClient = new BackendClientService(configuredBackendUrl ?? "http://localhost:5000");
             var tcpClient = new Services.TcpStreamClient(null);
-            
-            // ViewModel'i set et
-            DataContext = new MainViewModel(backendClient, tcpClient);
+            DataContext = new MainViewModel(tempBackendClient, tcpClient);
         }
         catch (Exception ex)
         {
             MessageBox.Show($"MainWindow oluşturulurken hata: {ex.Message}\n\nStack Trace: {ex.StackTrace}", 
                 "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// appsettings.json'dan Backend URL'ini okur.
+    /// </summary>
+    private string? ReadBackendUrlFromConfig()
+    {
+            try
+            {
+                var configPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+                if (System.IO.File.Exists(configPath))
+                {
+                    var json = System.IO.File.ReadAllText(configPath);
+                    var config = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, object>>(json);
+                    if (config != null && config.ContainsKey("BackendBaseUrl"))
+                    {
+                    return config["BackendBaseUrl"]?.ToString();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"⚠️ appsettings.json okunamadı: {ex.Message}");
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Backend URL'ini çözer ve ViewModel'i günceller.
+    /// </summary>
+    private async Task ResolveAndInitializeBackendAsync(string? configuredUrl)
+    {
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"🔵 Backend URL çözülüyor... (Configured: {configuredUrl ?? "null"})");
+            
+            var resolvedUrl = await BackendUrlResolver.ResolveBackendUrlAsync(configuredUrl);
+            
+            if (resolvedUrl == null)
+            {
+                System.Diagnostics.Debug.WriteLine("⚠️ Backend URL bulunamadı. appsettings.json'da BackendBaseUrl belirtin veya Backend'i başlatın.");
+                resolvedUrl = configuredUrl ?? "http://localhost:5000"; // Fallback
+                            }
+                            else
+                            {
+                System.Diagnostics.Debug.WriteLine($"✅ Backend URL bulundu: {resolvedUrl}");
+                
+                // Bulunan URL'i appsettings.json'a kaydet (eğer farklıysa)
+                if (resolvedUrl != configuredUrl)
+                {
+                    SaveBackendUrlToConfig(resolvedUrl);
+                }
+            }
+            
+            // ViewModel'i yeni URL ile güncelle
+            if (DataContext is MainViewModel viewModel)
+            {
+                var newBackendClient = new BackendClientService(resolvedUrl);
+                viewModel.UpdateBackendClient(newBackendClient);
+                System.Diagnostics.Debug.WriteLine($"🔵 ViewModel Backend URL güncellendi: {resolvedUrl}");
+                }
+            }
+            catch (Exception ex)
+            {
+            System.Diagnostics.Debug.WriteLine($"❌ Backend URL çözülürken hata: {ex.Message}");
+            }
+    }
+
+    /// <summary>
+    /// Backend URL'ini appsettings.json'a kaydeder.
+    /// </summary>
+    private void SaveBackendUrlToConfig(string url)
+    {
+        try
+        {
+            var configPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+            var config = new System.Collections.Generic.Dictionary<string, object>();
+            
+            if (System.IO.File.Exists(configPath))
+            {
+                var json = System.IO.File.ReadAllText(configPath);
+                config = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, object>>(json) ?? config;
+            }
+            
+            config["BackendBaseUrl"] = url;
+            var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            System.IO.File.WriteAllText(configPath, System.Text.Json.JsonSerializer.Serialize(config, options));
+            
+            System.Diagnostics.Debug.WriteLine($"💾 Backend URL appsettings.json'a kaydedildi: {url}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"⚠️ Backend URL kaydedilemedi: {ex.Message}");
         }
     }
 
@@ -528,5 +628,40 @@ public partial class MainWindow : Window
         };
 
         successIndicator.BeginAnimation(System.Windows.UIElement.OpacityProperty, fadeOutAnimation);
+    }
+
+    private void RemoteAddressTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter)
+        {
+            System.Diagnostics.Debug.WriteLine("🔵 Enter tuşuna basıldı, bağlantı başlatılıyor...");
+            var viewModel = DataContext as MainViewModel;
+            if (viewModel != null)
+            {
+                // TextBox'taki değeri ViewModel'e aktar (binding gecikmesi olabilir)
+                var textBox = sender as System.Windows.Controls.TextBox;
+                if (textBox != null && !string.IsNullOrWhiteSpace(textBox.Text))
+                {
+                    viewModel.RemoteDeviceId = textBox.Text;
+                    System.Diagnostics.Debug.WriteLine($"🔵 RemoteDeviceId güncellendi: {viewModel.RemoteDeviceId}");
+                }
+                
+                // ConnectCommand'i tetikle
+                if (viewModel.ConnectCommand.CanExecute(null))
+                {
+                    System.Diagnostics.Debug.WriteLine("✅ ConnectCommand çalıştırılıyor...");
+                    viewModel.ConnectCommand.Execute(null);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"⚠️ ConnectCommand çalıştırılamıyor (CanExecute = false). IsConnected: {viewModel.IsConnected}, RemoteDeviceId: '{viewModel.RemoteDeviceId}'");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("❌ ViewModel null!");
+            }
+            e.Handled = true;
+        }
     }
 }
