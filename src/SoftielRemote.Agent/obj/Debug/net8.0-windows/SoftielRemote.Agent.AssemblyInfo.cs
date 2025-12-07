@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SoftielRemote.Agent")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+305564cba56eeb6ffa5ca7faffc1286ba407fd5e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d803d07da7a970e2106b9256612733b734ae07c8")]
 [assembly: System.Reflection.AssemblyProductAttribute("SoftielRemote.Agent")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SoftielRemote.Agent")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

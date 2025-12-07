@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_state_provider.dart';
+import '../providers/notification_provider.dart';
 import '../utils/app_theme.dart';
 
 /// Device ID display section
@@ -19,12 +20,10 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
     await Clipboard.setData(ClipboardData(text: text));
     
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$label kopyalandı'),
-          duration: const Duration(seconds: 1),
-          backgroundColor: AppTheme.successGreen,
-        ),
+      ref.read(notificationProvider.notifier).showSuccess(
+        '$label kopyalandı',
+        duration: const Duration(seconds: 2),
+        icon: Icons.copy_rounded,
       );
     }
   }
@@ -32,11 +31,10 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
   void _onInvitePressed() {
     // TODO: Davet etme işlevselliği eklenecek
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Davet etme özelliği yakında eklenecek'),
-          duration: Duration(seconds: 2),
-        ),
+      ref.read(notificationProvider.notifier).showInfo(
+        'Davet etme özelliği yakında eklenecek',
+        duration: const Duration(seconds: 2),
+        icon: Icons.person_add_rounded,
       );
     }
   }
@@ -44,11 +42,10 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
   void _onChangePasswordPressed() {
     // TODO: Şifre değiştirme işlevselliği eklenecek
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Şifre değiştirme özelliği yakında eklenecek'),
-          duration: Duration(seconds: 2),
-        ),
+      ref.read(notificationProvider.notifier).showInfo(
+        'Şifre değiştirme özelliği yakında eklenecek',
+        duration: const Duration(seconds: 2),
+        icon: Icons.vpn_key_rounded,
       );
     }
   }
@@ -75,7 +72,8 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
 
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+        constraints: const BoxConstraints(maxWidth: 900),
         decoration: BoxDecoration(
           color: AppTheme.surfaceMedium,
           borderRadius: BorderRadius.circular(16),
@@ -85,7 +83,7 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 26),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -108,8 +106,8 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
                   letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(width: 24),
-              // Device ID - renk değişmedi (gradient, font size aynı)
+              const SizedBox(width: 16),
+              // Device ID
               MouseRegion(
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
@@ -126,15 +124,17 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
                       formattedDeviceId,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 56,
+                        fontSize: 42,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
+                        letterSpacing: 1.2,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 10),
               // Copy button - temaya uygun, daha modern
               MouseRegion(
                 cursor: SystemMouseCursors.click,
@@ -144,7 +144,7 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
                     onTap: () => _copyToClipboard(deviceInfo.deviceId, 'Bağlantı Kodu'),
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: AppTheme.surfaceLight.withOpacity(0.4),
                         borderRadius: BorderRadius.circular(10),
@@ -155,14 +155,14 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
                       ),
                       child: Icon(
                         Icons.copy_rounded,
-                        size: 22,
+                        size: 20,
                         color: AppTheme.textPrimary,
                       ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 10),
               // Şifre değiştirme ikonu
               MouseRegion(
                 cursor: SystemMouseCursors.click,
@@ -172,7 +172,7 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
                     onTap: _onChangePasswordPressed,
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: AppTheme.surfaceLight.withOpacity(0.4),
                         borderRadius: BorderRadius.circular(10),
@@ -183,26 +183,42 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
                       ),
                       child: Icon(
                         Icons.vpn_key_rounded,
-                        size: 20,
+                        size: 18,
                         color: AppTheme.textPrimary,
                       ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 10),
               // Davet Et butonu - hover efekti ile
               MouseRegion(
                 cursor: SystemMouseCursors.click,
-                onEnter: (_) => setState(() => _isInviteHovered = true),
-                onExit: (_) => setState(() => _isInviteHovered = false),
+                onEnter: (_) {
+                  if (mounted) {
+                    Future.microtask(() {
+                      if (mounted) {
+                        setState(() => _isInviteHovered = true);
+                      }
+                    });
+                  }
+                },
+                onExit: (_) {
+                  if (mounted) {
+                    Future.microtask(() {
+                      if (mounted) {
+                        setState(() => _isInviteHovered = false);
+                      }
+                    });
+                  }
+                },
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: _onInvitePressed,
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
                         color: _isInviteHovered 
                             ? Color.lerp(AppTheme.primaryBlue, AppTheme.primaryBlueDark, 0.3)!
@@ -218,19 +234,19 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
                         children: [
                           Icon(
                             Icons.person_add_rounded,
-                            size: 18,
+                            size: 16,
                             color: _isInviteHovered 
                                 ? AppTheme.textPrimary 
                                 : Color.lerp(AppTheme.primaryBlue, AppTheme.primaryBlueDark, 0.3)!,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Text(
                             'Davet Et',
                             style: TextStyle(
                               color: _isInviteHovered 
                                   ? AppTheme.textPrimary 
                                   : Color.lerp(AppTheme.primaryBlue, AppTheme.primaryBlueDark, 0.3)!,
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.3,
                             ),
@@ -248,4 +264,3 @@ class _DeviceIdSectionState extends ConsumerState<DeviceIdSection> {
     );
   }
 }
-

@@ -107,8 +107,24 @@ class _TabItemWidgetState extends State<_TabItemWidget> {
       onTap: widget.onTap,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
+        onEnter: (_) {
+          if (mounted) {
+            Future.microtask(() {
+              if (mounted) {
+                setState(() => _isHovered = true);
+              }
+            });
+          }
+        },
+        onExit: (_) {
+          if (mounted) {
+            Future.microtask(() {
+              if (mounted) {
+                setState(() => _isHovered = false);
+              }
+            });
+          }
+        },
         child: Container(
           margin: EdgeInsets.only(
             right: widget.isLast ? 0 : 4,

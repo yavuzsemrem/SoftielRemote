@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import 'screens/home_screen.dart';
 import 'utils/app_theme.dart';
+import 'widgets/notification_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -172,6 +173,8 @@ class _SoftielRemoteAppState extends State<SoftielRemoteApp> with WindowListener
                   ),
                 ),
               ),
+            // Notification overlay - sağ üstte
+            const NotificationOverlay(),
           ],
         );
       },

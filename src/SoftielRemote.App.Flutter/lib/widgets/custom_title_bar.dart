@@ -3,10 +3,18 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:window_manager/window_manager.dart';
 import '../utils/app_theme.dart';
 import 'tab_bar_widget.dart';
+import 'profile_dropdown.dart';
 
 /// Custom title bar with logo, tabs, and window controls
-class CustomTitleBar extends StatelessWidget {
+class CustomTitleBar extends StatefulWidget {
   const CustomTitleBar({super.key});
+
+  @override
+  State<CustomTitleBar> createState() => _CustomTitleBarState();
+}
+
+class _CustomTitleBarState extends State<CustomTitleBar> {
+  final GlobalKey _profileButtonKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -50,15 +58,62 @@ class CustomTitleBar extends StatelessWidget {
             child: BrowserTabsWidget(),
           ),
           
-          // Window Controls (Desktop only)
-          if (!kIsWeb)
-            Flexible(
-              fit: FlexFit.loose,
-              child: const WindowCaption(
-                brightness: Brightness.dark,
-                backgroundColor: Colors.transparent,
+          // Right side: Profile Icon + Window Controls (birlikte en sağda)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Profile Icon Button (Window controls'ün solunda)
+              Builder(
+                builder: (context) => MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Container(
+                    key: _profileButtonKey,
+                    margin: const EdgeInsets.only(
+                      right: 4,
+                      left: 12,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          ProfileDropdown(buttonKey: _profileButtonKey)
+                              .showDropdown(context);
+                        },
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceMedium,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppTheme.surfaceLight.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.person_outline_rounded,
+                            color: AppTheme.textSecondary,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+              
+              // Window Controls (Desktop only - En sağda)
+              if (!kIsWeb)
+                SizedBox(
+                  width: 138, // Window controls için sabit genişlik
+                  child: const WindowCaption(
+                    brightness: Brightness.dark,
+                    backgroundColor: Colors.transparent,
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );

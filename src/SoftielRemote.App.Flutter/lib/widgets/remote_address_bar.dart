@@ -130,14 +130,14 @@ class _RemoteAddressBarState extends ConsumerState<RemoteAddressBar> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _ShortcutItem(
-                      icon: Icons.contacts_outlined,
-                      label: 'Adres Defterini Aç',
+                      icon: Icons.folder_outlined,
+                      label: 'Dosya Transfer Et',
                       shortcut: _KeyboardShortcutBadge(
-                        keys: ['Ctrl', 'A'],
+                        keys: ['Ctrl', 'F'],
                         label: '',
                       ),
                       onTap: () {
-                        _handleMenuSelection('address_book');
+                        _handleMenuSelection('file_transfer');
                         _focusNode.unfocus();
                       },
                     ),
@@ -183,160 +183,160 @@ class _RemoteAddressBarState extends ConsumerState<RemoteAddressBar> {
     if (button == null) return;
     
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final RelativeRect position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        button.localToGlobal(Offset.zero, ancestor: overlay),
-        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
-      ),
-      Offset.zero & overlay.size,
-    );
+    final Offset buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
+    
+    const double menuWidth = 220.0;
+    const double menuItemHeight = 36.0;
+    const int menuItemCount = 8;
+    final double menuHeight = menuItemHeight * menuItemCount;
+    
+    // Menüyü butonun altında aç (üzerinde değil)
+    double menuLeft = buttonPosition.dx;
+    double menuTop = buttonPosition.dy + button.size.height + 4;
+    
+    // Sağdan taşmasını önle - sağa hizala
+    if (menuLeft + menuWidth > overlay.size.width) {
+      menuLeft = overlay.size.width - menuWidth - 8; // 8px margin
+    }
+    
+    // Soldan taşmasını önle
+    if (menuLeft < 8) {
+      menuLeft = 8;
+    }
+    
+    // Alttan taşmasını önle - yukarı aç
+    if (menuTop + menuHeight > overlay.size.height) {
+      menuTop = buttonPosition.dy - menuHeight - 4; // Butonun üstünde
+    }
 
-    showMenu<String>(
+    showGeneralDialog<String>(
       context: context,
-      position: position,
-      color: AppTheme.surfaceMedium,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
-        side: BorderSide(
-          color: AppTheme.surfaceLight,
-          width: 1,
-        ),
-      ),
-      items: [
-        PopupMenuItem<String>(
-          value: 'settings',
-          child: Row(
-            children: [
-              const Icon(Icons.settings, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 12),
-              const Text(
-                'Ayarlar',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
+      barrierDismissible: true,
+      barrierLabel: 'Menü',
+      barrierColor: Colors.transparent,
+      transitionDuration: Duration.zero, // Animasyon yok
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Stack(
+          children: [
+            Positioned(
+              left: menuLeft,
+              top: menuTop,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: menuWidth,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceMedium,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: AppTheme.surfaceLight.withOpacity(0.2),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 8,
+                        spreadRadius: 0,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMenuItem(
+                        icon: Icons.settings,
+                        text: 'Ayarlar',
+                        value: 'settings',
+                        onTap: () => Navigator.pop(context, 'settings'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.lock,
+                        text: 'Çalışma Alanı parolasını değiştir...',
+                        value: 'change_password',
+                        onTap: () => Navigator.pop(context, 'change_password'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.contacts,
+                        text: 'Adres defteri',
+                        value: 'address_book',
+                        onTap: () => Navigator.pop(context, 'address_book'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.play_circle_outline,
+                        text: 'Oturum kayıtları',
+                        value: 'session_recordings',
+                        onTap: () => Navigator.pop(context, 'session_recordings'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.vpn_key,
+                        text: 'Lisans anahtarını değiştir...',
+                        value: 'change_license',
+                        onTap: () => Navigator.pop(context, 'change_license'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.help_outline,
+                        text: 'Yardım',
+                        value: 'help',
+                        onTap: () => Navigator.pop(context, 'help'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.info_outline,
+                        text: 'SoftielRemote Hakkında',
+                        value: 'about',
+                        onTap: () => Navigator.pop(context, 'about'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.close,
+                        text: 'Sonlandır',
+                        value: 'exit',
+                        onTap: () => Navigator.pop(context, 'exit'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'change_password',
-          child: Row(
-            children: [
-              const Icon(Icons.lock, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 12),
-              const Text(
-                'Çalışma Alanı parolasını değiştir...',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'address_book',
-          child: Row(
-            children: [
-              const Icon(Icons.contacts, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 12),
-              const Text(
-                'Adres defteri',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'session_recordings',
-          child: Row(
-            children: [
-              const Icon(Icons.play_circle_outline, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 12),
-              const Text(
-                'Oturum kayıtları',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'change_license',
-          child: Row(
-            children: [
-              const Icon(Icons.vpn_key, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 12),
-              const Text(
-                'Lisans anahtarını değiştir...',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'help',
-          child: Row(
-            children: [
-              const Icon(Icons.help_outline, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 12),
-              const Text(
-                'Yardım',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'about',
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 12),
-              const Text(
-                'SoftielRemote Hakkında',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'exit',
-          child: Row(
-            children: [
-              const Icon(Icons.close, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 12),
-              const Text(
-                'Sonlandır',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     ).then((value) {
       if (value != null) {
         _handleMenuSelection(value);
       }
     });
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String text,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: AppTheme.textSecondary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _handleMenuSelection(String value) {
@@ -346,6 +346,10 @@ class _RemoteAddressBarState extends ConsumerState<RemoteAddressBar> {
         break;
       case 'change_password':
         // TODO: Change workspace password
+        break;
+      case 'file_transfer':
+        // TODO: Open file transfer section
+        // Şimdilik sadece bir placeholder - ileride ContentSectionsWidget'teki section'ı değiştirecek
         break;
       case 'address_book':
         // TODO: Open address book
@@ -388,9 +392,15 @@ class _RemoteAddressBarState extends ConsumerState<RemoteAddressBar> {
     final isConnected = connectionInfo.status == ConnectionStatus.connected;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+      decoration: BoxDecoration(
         color: AppTheme.backgroundDark,
+        border: Border(
+          bottom: BorderSide(
+            color: AppTheme.surfaceLight.withOpacity(0.35),
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -430,9 +440,9 @@ class _RemoteAddressBarState extends ConsumerState<RemoteAddressBar> {
                   // Ctrl+Enter veya Cmd+Enter (Bağlan)
                   const SingleActivator(LogicalKeyboardKey.enter, control: true): _ConnectIntent(),
                   const SingleActivator(LogicalKeyboardKey.enter, meta: true): _ConnectIntent(),
-                  // Ctrl+A veya Cmd+A (Adres Defterini Aç)
-                  const SingleActivator(LogicalKeyboardKey.keyA, control: true): _AddressBookIntent(),
-                  const SingleActivator(LogicalKeyboardKey.keyA, meta: true): _AddressBookIntent(),
+                  // Ctrl+F veya Cmd+F (Dosya Transfer Et)
+                  const SingleActivator(LogicalKeyboardKey.keyF, control: true): _FileTransferIntent(),
+                  const SingleActivator(LogicalKeyboardKey.keyF, meta: true): _FileTransferIntent(),
                   // Ctrl+R veya Cmd+R (Ekran Kaydını Başlat)
                   const SingleActivator(LogicalKeyboardKey.keyR, control: true): _RecordIntent(),
                   const SingleActivator(LogicalKeyboardKey.keyR, meta: true): _RecordIntent(),
@@ -442,9 +452,9 @@ class _RemoteAddressBarState extends ConsumerState<RemoteAddressBar> {
                     _ConnectIntent: CallbackAction<_ConnectIntent>(
                       onInvoke: (_) => _handleConnect(),
                     ),
-                    _AddressBookIntent: CallbackAction<_AddressBookIntent>(
+                    _FileTransferIntent: CallbackAction<_FileTransferIntent>(
                       onInvoke: (_) {
-                        _handleMenuSelection('address_book');
+                        _handleMenuSelection('file_transfer');
                         return null;
                       },
                     ),
@@ -457,8 +467,17 @@ class _RemoteAddressBarState extends ConsumerState<RemoteAddressBar> {
                   },
                   child: Focus(
                     onKeyEvent: (node, event) {
-                      // Ctrl+V veya Cmd+V için Flutter otomatik yapıştırma yapar
-                      // Burada özel bir işlem yapmaya gerek yok
+                      // Kısayolları handle et
+                      if (event is KeyDownEvent) {
+                        final isControl = event.logicalKey == LogicalKeyboardKey.controlLeft ||
+                            event.logicalKey == LogicalKeyboardKey.controlRight;
+                        final isMeta = event.logicalKey == LogicalKeyboardKey.metaLeft ||
+                            event.logicalKey == LogicalKeyboardKey.metaRight;
+                        
+                        // Ctrl+V veya Cmd+V için Flutter otomatik yapıştırma yapar
+                        // Diğer kısayollar Shortcuts widget'ı tarafından handle edilir
+                        return KeyEventResult.ignored;
+                      }
                       return KeyEventResult.ignored;
                     },
                     child: TextField(
@@ -560,9 +579,9 @@ class _ConnectIntent extends Intent {
   const _ConnectIntent();
 }
 
-/// Intent class for address book action
-class _AddressBookIntent extends Intent {
-  const _AddressBookIntent();
+/// Intent class for file transfer action
+class _FileTransferIntent extends Intent {
+  const _FileTransferIntent();
 }
 
 /// Intent class for record action
