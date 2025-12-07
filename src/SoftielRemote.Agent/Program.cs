@@ -116,7 +116,7 @@ var config = new AgentConfig
 {
     BackendBaseUrl = resolvedBackendUrl,
     DeviceId = deviceId, // deviceid.json veya appsettings.json'dan DeviceId oku
-    FrameIntervalMs = int.Parse(builder.Configuration["FrameIntervalMs"] ?? "200"),
+    FrameIntervalMs = int.Parse(builder.Configuration["FrameIntervalMs"] ?? "33"), // 30 FPS için 33ms
     ScreenWidth = int.Parse(builder.Configuration["ScreenWidth"] ?? "800"),
     ScreenHeight = int.Parse(builder.Configuration["ScreenHeight"] ?? "600"),
     TcpServerPort = int.Parse(builder.Configuration["TcpServerPort"] ?? "8888")
@@ -128,9 +128,40 @@ builder.Services.AddSingleton(config);
 builder.Services.AddHttpClient<IBackendClientService, BackendClientService>();
 
 // Services
-// GDI+ tabanlı gerçek ekran yakalama servisi (test için)
-builder.Services.AddSingleton<IScreenCaptureService, GdiScreenCaptureService>();
-// Not: Production için DirectX Desktop Duplication kullanılabilir (daha performanslı)
+// Ekran yakalama servisi: DirectX Desktop Duplication (production-ready, yüksek performans)
+// Eğer DirectX başarısız olursa GDI+ fallback kullanılacak
+builder.Services.AddSingleton<IScreenCaptureService>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<IScreenCaptureService>>();
+    try
+    {
+        // Önce DirectX'i dene
+        var directXService = new DirectXDesktopDuplicationService(
+            sp.GetRequiredService<ILogger<DirectXDesktopDuplicationService>>());
+        directXService.StartCapture();
+        
+        // Test frame al
+        var testFrame = directXService.CaptureScreenAsync(1920, 1080).GetAwaiter().GetResult();
+        if (testFrame != null)
+        {
+            Console.WriteLine("✅ DirectX Desktop Duplication başarıyla başlatıldı");
+            return directXService;
+        }
+        else
+        {
+            Console.WriteLine("⚠️ DirectX test frame null, GDI+ fallback'e geçiliyor");
+            directXService.Dispose();
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ DirectX başlatılamadı, GDI+ fallback'e geçiliyor: {ex.Message}");
+    }
+    
+    // Fallback: GDI+ kullan
+    Console.WriteLine("🔄 GDI+ Screen Capture servisi kullanılıyor");
+    return new GdiScreenCaptureService(sp.GetRequiredService<ILogger<GdiScreenCaptureService>>());
+});
 builder.Services.AddSingleton<VideoEncodingService>();
 builder.Services.AddSingleton<TcpStreamServer>(sp =>
 {
@@ -144,16 +175,94 @@ builder.Services.AddHostedService<AgentService>();
 
 var host = builder.Build();
 
-// WPF Application'ı ayrı thread'de başlat (popup'lar için gerekli)
-_ = Task.Run(() =>
+// WPF Application'ı STA thread'de başlat (popup'lar için gerekli)
+// WPF Application'lar STA (Single Threaded Apartment) thread'de çalışmalı
+var wpfAppReady = new System.Threading.ManualResetEventSlim(false);
+App? wpfAppInstance = null;
+var wpfAppThread = new System.Threading.Thread(() =>
 {
-    var app = new App();
-    app.ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown; // Otomatik kapanmayı engelle
-    app.Run(); // WPF message loop'u başlat
-});
+    try
+    {
+        Console.WriteLine("🔨 WPF Application thread başlatılıyor (STA)...");
+        Console.WriteLine($"   Thread ID: {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+        Console.WriteLine($"   Apartment State: {System.Threading.Thread.CurrentThread.GetApartmentState()}");
+        
+        // STA thread'de WPF Application başlat
+        var app = new App();
+        Console.WriteLine("✅ WPF Application oluşturuldu");
+        
+        app.ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown; // Otomatik kapanmayı engelle
+        Console.WriteLine("✅ WPF Application ShutdownMode ayarlandı");
+        
+        // App.Instance constructor'da set edildi, burada kontrol et
+        wpfAppInstance = App.Instance;
+        Console.WriteLine($"✅ App.Instance kontrol edildi: {(wpfAppInstance != null ? "Mevcut" : "NULL")}");
+        
+        // Dispatcher'ın mevcut olduğunu kontrol et
+        if (wpfAppInstance != null && wpfAppInstance.Dispatcher != null)
+        {
+            Console.WriteLine($"✅ WPF Dispatcher mevcut: ThreadId={wpfAppInstance.Dispatcher.Thread.ManagedThreadId}");
+        }
+        else
+        {
+            Console.WriteLine("⚠️ WPF Dispatcher henüz mevcut değil (app.Run() sonrası hazır olacak)");
+        }
+        
+        // Application_Startup event'inin tetiklenmesi için kısa bekleme
+        System.Threading.Thread.Sleep(300);
+        
+        // Instance'ın set edildiğini doğrula
+        if (wpfAppInstance != null)
+        {
+            wpfAppReady.Set();
+            Console.WriteLine("✅ WPF Application instance hazır ve signal verildi");
+        }
+        else
+        {
+            Console.WriteLine("⚠️ WPF Application instance null, yine de devam ediliyor");
+            wpfAppReady.Set();
+        }
+        
+        Console.WriteLine("🔄 WPF Application message loop başlatılıyor (app.Run())...");
+        app.Run(); // WPF message loop'u başlat (bu bloklayıcı)
+        Console.WriteLine("🛑 WPF Application message loop sonlandı");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ WPF Application başlatma hatası: {ex.Message}");
+        Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+        if (ex.InnerException != null)
+        {
+            Console.WriteLine($"❌ Inner exception: {ex.InnerException.Message}");
+        }
+        wpfAppReady.Set(); // Hata durumunda da signal ver
+    }
+})
+{
+    IsBackground = false, // Ana thread kapanırsa WPF Application da kapansın
+    Name = "WPF Application Thread"
+};
 
-// Kısa bir bekleme (WPF Application'ın başlaması için)
-await Task.Delay(500);
+wpfAppThread.SetApartmentState(System.Threading.ApartmentState.STA); // STA thread olarak ayarla
+wpfAppThread.Start();
+
+// WPF Application'ın başlamasını bekle (maksimum 5 saniye)
+if (!wpfAppReady.Wait(TimeSpan.FromSeconds(5)))
+{
+    Console.WriteLine("⚠️ WPF Application başlatılamadı (timeout)");
+}
+else
+{
+    // Instance'ı tekrar kontrol et
+    if (App.Instance != null)
+    {
+        Console.WriteLine("✅ WPF Application başlatıldı ve instance hazır");
+    }
+    else
+    {
+        Console.WriteLine("⚠️ WPF Application başlatıldı ama instance null");
+    }
+}
 
 Console.WriteLine("SoftielRemote Agent başlatılıyor...");
 Console.WriteLine($"Backend URL: {config.BackendBaseUrl}");

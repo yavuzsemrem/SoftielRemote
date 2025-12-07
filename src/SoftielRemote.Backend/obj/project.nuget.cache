@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "jZQKcxt4+aI=",
+  "dgSpecHash": "Wc6fxNrReIM=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj",
+  "projectFilePath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Yavuz\\.nuget\\packages\\aspnetcore.healthchecks.npgsql\\8.0.2\\aspnetcore.healthchecks.npgsql.8.0.2.nupkg.sha512",
     "C:\\Users\\Yavuz\\.nuget\\packages\\aspnetcore.healthchecks.redis\\9.0.0\\aspnetcore.healthchecks.redis.9.0.0.nupkg.sha512",

@@ -11,8 +11,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoftielRemote.Backend", "sr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoftielRemote.Agent", "src\SoftielRemote.Agent\SoftielRemote.Agent.csproj", "{9B85F276-6320-4EAE-9166-BB0B90B9389D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoftielRemote.App", "src\SoftielRemote.App\SoftielRemote.App.csproj", "{62DBE1AF-00C3-451F-A76D-059F4B6F2434}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -59,18 +57,6 @@ Global
 		{9B85F276-6320-4EAE-9166-BB0B90B9389D}.Release|x64.Build.0 = Release|Any CPU
 		{9B85F276-6320-4EAE-9166-BB0B90B9389D}.Release|x86.ActiveCfg = Release|Any CPU
 		{9B85F276-6320-4EAE-9166-BB0B90B9389D}.Release|x86.Build.0 = Release|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Debug|x64.Build.0 = Debug|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Debug|x86.Build.0 = Debug|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Release|Any CPU.Build.0 = Release|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Release|x64.ActiveCfg = Release|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Release|x64.Build.0 = Release|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Release|x86.ActiveCfg = Release|Any CPU
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -79,6 +65,5 @@ Global
 		{6C3631E0-62F7-4773-8BF4-C7504594A07C} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{5FAE5ADC-EDC0-4EB5-968F-B90D55ACEC36} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{9B85F276-6320-4EAE-9166-BB0B90B9389D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{62DBE1AF-00C3-451F-A76D-059F4B6F2434} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

@@ -42,7 +42,7 @@ public class AgentsController : ControllerBase
     /// Rate Limit: 10 istek/dakika (IP bazlı)
     /// </remarks>
     /// <param name="request">Agent kayıt bilgileri</param>
-    /// <returns>Kayıt başarılıysa DeviceId ve Password döner</returns>
+    /// <returns>Kayıt başarılıysa DeviceId döner</returns>
     /// <response code="200">Kayıt başarılı</response>
     /// <response code="400">Geçersiz istek veya validation hatası</response>
     /// <response code="429">Rate limit aşıldı</response>

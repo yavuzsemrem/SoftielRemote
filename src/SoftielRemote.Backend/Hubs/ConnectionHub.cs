@@ -55,20 +55,23 @@ public class ConnectionHub : Hub
                     {
                         // Agent'ın kayıtlı olup olmadığını kontrol et
                         var agent = await agentRepository.GetByDeviceIdAsync(deviceId);
+                        var redisState = scope.ServiceProvider.GetRequiredService<IRedisStateService>();
+                        
                         if (agent != null)
                         {
-                            await agentRepository.UpdateConnectionIdAsync(deviceId, connectionId);
-                            
-                            // Redis'te de connection ID'yi sakla
-                            var redisState = scope.ServiceProvider.GetRequiredService<IRedisStateService>();
+                            // Agent bulundu - Agent connection ID'sini sakla
+                            // Önce Redis'e kaydet (hızlı erişim için), sonra PostgreSQL'e
                             await redisState.SetAgentConnectionIdAsync(deviceId, connectionId, TimeSpan.FromHours(1));
                             await redisState.SetAgentOnlineAsync(deviceId, TimeSpan.FromMinutes(5));
+                            await agentRepository.UpdateConnectionIdAsync(deviceId, connectionId);
                             
-                            _logger.LogInformation("Device {DeviceId} connection ID güncellendi (query): {ConnectionId}", deviceId, connectionId);
+                            _logger.LogInformation("Agent connection ID güncellendi (query): {DeviceId} -> {ConnectionId}", deviceId, connectionId);
                         }
                         else
                         {
-                            _logger.LogWarning("Device {DeviceId} henüz kayıtlı değil, RegisterDevice metodu bekleniyor", deviceId);
+                            // Agent bulunamadı - Controller olarak kabul et ve connection ID'sini sakla
+                            await redisState.SetControllerConnectionIdAsync(deviceId, connectionId, TimeSpan.FromHours(1));
+                            _logger.LogInformation("Controller connection ID güncellendi (query): {DeviceId} -> {ConnectionId}", deviceId, connectionId);
                         }
                     }
                     catch (Exception dbEx)
@@ -234,20 +237,23 @@ public class ConnectionHub : Hub
                 {
                     // Agent'ın kayıtlı olup olmadığını kontrol et
                     var agent = await agentRepository.GetByDeviceIdAsync(deviceId);
+                    var redisState = scope.ServiceProvider.GetRequiredService<IRedisStateService>();
+                    
                     if (agent != null)
                     {
-                        await agentRepository.UpdateConnectionIdAsync(deviceId, connectionId);
-                        
-                        // Redis'te de connection ID'yi sakla
-                        var redisState = scope.ServiceProvider.GetRequiredService<IRedisStateService>();
+                        // Agent bulundu - Agent connection ID'sini sakla
+                        // Önce Redis'e kaydet (hızlı erişim için), sonra PostgreSQL'e
                         await redisState.SetAgentConnectionIdAsync(deviceId, connectionId, TimeSpan.FromHours(1));
                         await redisState.SetAgentOnlineAsync(deviceId, TimeSpan.FromMinutes(5));
+                        await agentRepository.UpdateConnectionIdAsync(deviceId, connectionId);
                         
-                        _logger.LogInformation("Device kaydedildi: {DeviceId} -> {ConnectionId}", deviceId, connectionId);
+                        _logger.LogInformation("Agent kaydedildi: {DeviceId} -> {ConnectionId}", deviceId, connectionId);
                     }
                     else
                     {
-                        _logger.LogWarning("Device {DeviceId} henüz kayıtlı değil, önce REST API ile kayıt olmalı", deviceId);
+                        // Agent bulunamadı - Controller olarak kabul et ve connection ID'sini sakla
+                        await redisState.SetControllerConnectionIdAsync(deviceId, connectionId, TimeSpan.FromHours(1));
+                        _logger.LogInformation("Controller kaydedildi: {DeviceId} -> {ConnectionId}", deviceId, connectionId);
                     }
                 }
                 catch (Exception dbEx)

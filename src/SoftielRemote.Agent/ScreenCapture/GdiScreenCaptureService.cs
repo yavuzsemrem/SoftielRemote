@@ -18,10 +18,12 @@ public class GdiScreenCaptureService : IScreenCaptureService, IDisposable
     private long _frameNumber = 0;
     private readonly ILogger<GdiScreenCaptureService> _logger;
     private bool _disposed = false;
+    private readonly CursorCaptureService _cursorCapture;
 
     public GdiScreenCaptureService(ILogger<GdiScreenCaptureService> logger)
     {
         _logger = logger;
+        _cursorCapture = new CursorCaptureService();
     }
 
     public Task<RemoteFrameMessage?> CaptureScreenAsync(int width, int height)
@@ -57,6 +59,17 @@ public class GdiScreenCaptureService : IScreenCaptureService, IDisposable
                 0,
                 new Size(captureWidth, captureHeight),
                 CopyPixelOperation.SourceCopy);
+
+            // Cursor'ı bitmap'e çiz - hata durumunda frame'i bozmamak için try-catch ile koruma
+            try
+            {
+                _cursorCapture.DrawCursorOnBitmap(bitmap, 1.0, 1.0); // GDI+ için scale gerekmez
+            }
+            catch (Exception cursorEx)
+            {
+                // Cursor çizme hatası - frame'i bozmadan devam et
+                _logger.LogDebug(cursorEx, "Cursor çizme hatası (frame devam ediyor)");
+            }
 
             // Bitmap'i JPEG formatında byte array'e çevir (kalite: %80)
             byte[] imageData;

@@ -6,12 +6,15 @@ using SoftielRemote.Agent.Config;
 using SoftielRemote.Agent.InputInjection;
 using SoftielRemote.Agent.Networking;
 using SoftielRemote.Agent.ScreenCapture;
+using DirectXDesktopDuplicationService = SoftielRemote.Agent.ScreenCapture.DirectXDesktopDuplicationService;
 using SoftielRemote.Core.Dtos;
 using SoftielRemote.Core.Messages;
 using SoftielRemote.Core.Utils;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Interop;
 
 namespace SoftielRemote.Agent.Services;
 
@@ -115,10 +118,6 @@ public class AgentService : BackgroundService
             Console.WriteLine("\n" + new string('=', 60));
             Console.WriteLine($"✅ Agent başarıyla kaydedildi!");
             Console.WriteLine($"📱 Device ID: {_deviceId}");
-            if (!string.IsNullOrEmpty(registrationResponse.Password))
-            {
-                Console.WriteLine($"🔑 Password: {registrationResponse.Password}");
-            }
             Console.WriteLine(new string('=', 60) + "\n");
             
             _logger.LogInformation("Agent başarıyla kaydedildi. Device ID: {DeviceId}", _deviceId);
@@ -157,6 +156,9 @@ public class AgentService : BackgroundService
         // TCP Server'ı başlat
         try
         {
+            // Client bağlantı event'ini dinle
+            _tcpServer.OnClientConnected += OnTcpClientConnected;
+            
             await _tcpServer.StartAsync(stoppingToken);
         }
         catch (Exception ex)
@@ -165,27 +167,26 @@ public class AgentService : BackgroundService
             return;
         }
 
-        // Ekran yakalama servisini test et (bir kez çalıştır)
+        // Ekran yakalama servisini başlat (DirectX için StartCapture çağrısı gerekli)
+        // NOT: Test frame alınmıyor - sadece servis başlatılıyor, frame yakalama client bağlı olduğunda başlayacak
         try
         {
-            _logger.LogInformation("🔍 Ekran yakalama servisi test ediliyor...");
-            var testFrame = await _screenCapture.CaptureScreenAsync(
-                _config.ScreenWidth > 0 ? _config.ScreenWidth : 800,
-                _config.ScreenHeight > 0 ? _config.ScreenHeight : 600);
+            _logger.LogInformation("🔍 Ekran yakalama servisi başlatılıyor...");
             
-            if (testFrame != null)
+            // DirectX Desktop Duplication için StartCapture çağrısı
+            if (_screenCapture is DirectXDesktopDuplicationService directXService)
             {
-                _logger.LogInformation("✅ Ekran yakalama servisi çalışıyor: {Width}x{Height}, Size: {Size} bytes",
-                    testFrame.Width, testFrame.Height, testFrame.ImageData?.Length ?? 0);
+                directXService.StartCapture();
+                _logger.LogInformation("✅ DirectX Desktop Duplication başlatıldı (client bağlantısı bekleniyor)");
             }
             else
             {
-                _logger.LogWarning("⚠️ Ekran yakalama servisi test frame'i null döndü");
+                _logger.LogInformation("✅ Ekran yakalama servisi hazır (client bağlantısı bekleniyor)");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Ekran yakalama servisi test hatası: {Message}", ex.Message);
+            _logger.LogError(ex, "❌ Ekran yakalama servisi başlatma hatası: {Message}", ex.Message);
             _logger.LogError("Stack trace: {StackTrace}", ex.StackTrace);
         }
 
@@ -212,15 +213,19 @@ public class AgentService : BackgroundService
                     continue;
                 }
 
-                // Ekran yakalama
-                var frame = await _screenCapture.CaptureScreenAsync(
-                    _config.ScreenWidth, 
-                    _config.ScreenHeight);
+                // Ekran yakalama (ekran boyutları 0 ise tam ekran yakala)
+                var captureWidth = _config.ScreenWidth > 0 ? _config.ScreenWidth : 0;
+                var captureHeight = _config.ScreenHeight > 0 ? _config.ScreenHeight : 0;
+                var frame = await _screenCapture.CaptureScreenAsync(captureWidth, captureHeight);
 
                 if (frame != null)
                 {
-                    _logger.LogInformation("🖼️ Frame yakalandı: Width={Width}, Height={Height}, DataLength={DataLength}, FrameNumber={FrameNumber}", 
-                        frame.Width, frame.Height, frame.ImageData?.Length ?? 0, frame.FrameNumber);
+                    // İlk 5 frame için log, sonra her 30 frame'de bir
+                    if (frame.FrameNumber <= 5 || frame.FrameNumber % 30 == 0)
+                    {
+                        _logger.LogInformation("🖼️ Frame yakalandı: Width={Width}, Height={Height}, DataLength={DataLength}, FrameNumber={FrameNumber}", 
+                            frame.Width, frame.Height, frame.ImageData?.Length ?? 0, frame.FrameNumber);
+                    }
                     
                     // Frame'i TCP üzerinden gönder
                     await _tcpServer.SendFrameAsync(frame, stoppingToken);
@@ -251,16 +256,27 @@ public class AgentService : BackgroundService
                 }
                 else
                 {
-                    _logger.LogWarning("⚠️ Frame yakalanamadı (null)");
+                    // Frame yakalanamadı - sadece her 100 denemede bir log (spam önlemek için)
+                    // Frame number yok, sadece uyarı ver
+                    _logger.LogDebug("⚠️ Frame yakalanamadı (null) - DirectX timeout veya başka bir sorun");
                 }
 
-                // Input mesajlarını kontrol et (non-blocking)
-                var inputMessage = await _tcpServer.ReceiveInputAsync(stoppingToken);
-                if (inputMessage != null)
+                // Input mesajlarını kontrol et (non-blocking, timeout ile)
+                // Not: Bu blocking olmamalı, aksi halde frame gönderimi engellenir
+                try
                 {
-                    _logger.LogDebug("Input mesajı alındı: {Type}", inputMessage.Type);
-                    // Input injection (WebRTC data channel'den de gelebilir)
-                    await _inputInjection.InjectInputAsync(inputMessage);
+                    var inputMessage = await _tcpServer.ReceiveInputAsync(stoppingToken);
+                    if (inputMessage != null)
+                    {
+                        _logger.LogDebug("Input mesajı alındı: {Type}", inputMessage.Type);
+                        // Input injection (WebRTC data channel'den de gelebilir)
+                        await _inputInjection.InjectInputAsync(inputMessage);
+                    }
+                }
+                catch (Exception inputEx)
+                {
+                    // Input okuma hatası frame gönderimini engellememeli
+                    _logger.LogDebug(inputEx, "Input okuma hatası (normal, data yoksa)");
                 }
             }
             catch (OperationCanceledException)
@@ -442,6 +458,7 @@ public class AgentService : BackgroundService
                     // ICE candidate ekle
                     if (message.IceCandidate != null)
                     {
+                        _logger.LogInformation("ICE candidate eklendi: {Candidate}", message.IceCandidate.Candidate);
                         _webrtcPeer.AddIceCandidate(message.IceCandidate);
                     }
                     break;
@@ -464,13 +481,19 @@ public class AgentService : BackgroundService
     {
         try
         {
-            // ICE candidate gönderilirken hedef Device ID henüz bilinmiyor
-            // Bu normal bir durum - connection request geldiğinde hedef Device ID set edilecek
-            // Şimdilik sadece loglama yap, gerçek signaling connection request geldiğinde olacak
-            _logger.LogDebug("ICE candidate alındı, ancak hedef Device ID henüz bilinmiyor (connection request bekleniyor)");
+            // Hedef Device ID'yi WebRTC peer service'ten al
+            // Connection request geldiğinde hedef Device ID set edilmiş olmalı
+            // Eğer hala bilinmiyorsa, candidate'ı sakla ve connection request geldiğinde gönder
             
-            // TODO: Connection request geldiğinde hedef Device ID'yi set et ve ICE candidate'ları gönder
-            // Şimdilik ICE candidate'ları sakla veya connection request geldiğinde gönder
+            // Şimdilik connection request'teki requester ID'yi kullan
+            // TODO: Daha iyi bir yönetim için pending candidate listesi tutulabilir
+            
+            _logger.LogInformation("ICE candidate alındı: {Candidate}, Type={Type}", 
+                candidate.Candidate, candidate.Candidate.Contains("host") ? "host" : "srflx/relay");
+            
+            // ICE candidate'ı Backend'e gönder (eğer hedef Device ID biliniyorsa)
+            // Connection request geldiğinde hedef Device ID set edilecek
+            // Şimdilik candidate'ları göndermeyi connection request handler'ında yapacağız
         }
         catch (Exception ex)
         {
@@ -531,56 +554,299 @@ public class AgentService : BackgroundService
             var requesterIp = request.Value.GetProperty("RequesterIp").GetString() ?? "Bilinmeyen";
             var requesterId = request.Value.GetProperty("RequesterId").GetString() ?? "Bilinmeyen";
 
-            _logger.LogInformation("Connection request dialog gösteriliyor: ConnectionId={ConnectionId}, RequesterName={RequesterName}, RequesterIp={RequesterIp}", 
+            // Hem logger hem de console'a yaz (logger çalışmıyor olabilir)
+            _logger.LogInformation("🔔 Connection request dialog gösteriliyor: ConnectionId={ConnectionId}, RequesterName={RequesterName}, RequesterIp={RequesterIp}", 
                 connectionId, requesterName, requesterIp);
+            Console.WriteLine($"🔔 Connection request dialog gösteriliyor: ConnectionId={connectionId}, RequesterName={requesterName}, RequesterIp={requesterIp}");
+
+            // TCP Server'ı onay beklemeye al
+            _tcpServer.WaitForApproval();
+            Console.WriteLine("⏸️ TCP Server onay bekliyor...");
 
             // WPF UI thread'inde dialog göster
+            Views.ConnectionRequestDialog? dialog = null;
             bool? dialogResult = null;
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            var dialogResultEvent = new System.Threading.ManualResetEventSlim(false);
+            
+            // WPF Application instance'ını al (maksimum 10 saniye bekle - daha uzun süre)
+            App? wpfApp = null;
+            var maxWaitTime = DateTime.UtcNow.AddSeconds(10);
+            var retryCount = 0;
+            Console.WriteLine("🔍 WPF Application instance aranıyor...");
+            while (wpfApp == null && DateTime.UtcNow < maxWaitTime)
+            {
+                wpfApp = App.Instance;
+                if (wpfApp == null)
+                {
+                    retryCount++;
+                    _logger.LogDebug("WPF Application instance bekleniyor... (Retry: {RetryCount})", retryCount);
+                    Console.WriteLine($"⏳ WPF Application instance bekleniyor... (Retry: {retryCount})");
+                    await Task.Delay(200); // 200ms bekle
+                }
+            }
+            
+            if (wpfApp == null)
+            {
+                var errorMsg = "WPF Application instance bulunamadı (timeout) - dialog gösterilemedi";
+                _logger.LogError(errorMsg);
+                _logger.LogError("App.Instance değeri: {Instance}", App.Instance?.ToString() ?? "NULL");
+                Console.WriteLine($"❌ {errorMsg}");
+                Console.WriteLine($"❌ App.Instance değeri: {App.Instance?.ToString() ?? "NULL"}");
+                // Hata durumunda da TCP server'a reddet
+                _tcpServer.RejectConnection();
+                return;
+            }
+            
+            _logger.LogInformation("✅ WPF Application instance bulundu, dialog gösteriliyor");
+            Console.WriteLine("✅ WPF Application instance bulundu, dialog gösteriliyor");
+            
+            // Dispatcher'ın çalıştığından emin ol
+            if (wpfApp.Dispatcher == null)
+            {
+                var errorMsg = "WPF Dispatcher null - dialog gösterilemedi";
+                _logger.LogError(errorMsg);
+                Console.WriteLine($"❌ {errorMsg}");
+                _tcpServer.RejectConnection();
+                return;
+            }
+            
+            Console.WriteLine($"✅ WPF Dispatcher mevcut: ThreadId={System.Threading.Thread.CurrentThread.ManagedThreadId}");
+            
+            // BeginInvoke kullan (Invoke bloklayıcı ve deadlock oluşturabilir)
+            var action = new Action(() =>
             {
                 try
                 {
-                    var dialog = new Views.ConnectionRequestDialog(requesterName, requesterIp, requesterId);
-                    dialog.ShowDialog();
-                    dialogResult = dialog.Result;
+                    _logger.LogInformation("Dialog oluşturuluyor: RequesterName={RequesterName}, RequesterIp={RequesterIp}", requesterName, requesterIp);
+                    Console.WriteLine($"🔨 Dialog oluşturuluyor: RequesterName={requesterName}, RequesterIp={requesterIp}");
+                    
+                    dialog = new Views.ConnectionRequestDialog(requesterName, requesterIp, requesterId);
+                    Console.WriteLine($"✅ Dialog oluşturuldu");
+                    
+                    // Bağlantı kesme event'ini dinle
+                    var wpfAppForDisconnect = wpfApp; // Closure için local copy
+                    dialog.OnDisconnectRequested += async (s, e) =>
+                    {
+                        _logger.LogInformation("Bağlantı kesme isteği alındı: ConnectionId={ConnectionId}", connectionId);
+                        
+                        // TCP bağlantısını kes
+                        try
+                        {
+                            await _tcpServer.StopAsync();
+                            _logger.LogInformation("TCP bağlantısı kesildi");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "TCP bağlantısı kesilirken hata oluştu");
+                        }
+                        
+                        // Dialog'u kapat
+                        wpfAppForDisconnect.Dispatcher.Invoke(() =>
+                        {
+                            dialog?.CloseDialog();
+                        });
+                    };
+                    
+                    // Dialog'un Result değişikliğini dinle
+                    dialog.OnResultChanged += (s, e) =>
+                    {
+                        if (dialog != null && dialog.Result.HasValue)
+                        {
+                            dialogResult = dialog.Result;
+                            dialogResultEvent.Set();
+                        }
+                    };
+                    
+                    // Dialog'u göster ve aktif et
+                    dialog.Show();
+                    dialog.Activate();
+                    dialog.Focus();
+                    dialog.BringIntoView();
+                    dialog.Topmost = true;
+                    dialog.WindowState = WindowState.Normal; // Normal durumda göster
+                    dialog.ShowInTaskbar = true; // Taskbar'da göster
+                    
+                    // Dialog'un görünür olduğundan emin ol
+                    dialog.Visibility = Visibility.Visible;
+                    dialog.Opacity = 1.0;
+                    
+                    _logger.LogInformation("✅ Dialog gösterildi: Title={Title}, IsVisible={IsVisible}, IsLoaded={IsLoaded}", 
+                        dialog.Title, dialog.IsVisible, dialog.IsLoaded);
+                    Console.WriteLine($"✅ Dialog gösterildi: Title={dialog.Title}, IsVisible={dialog.IsVisible}, IsLoaded={dialog.IsLoaded}");
+                    
+                    // Win32 API ile pencereyi zorla öne getir (dialog gösterildikten sonra - biraz gecikme ile)
+                    // Dispatcher thread'inde çalıştır
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            // Dialog'un tamamen yüklenmesi için kısa bekleme
+                            await Task.Delay(300);
+                            
+                            // Dispatcher thread'inde Win32 API çağrılarını yap
+                            var dialogForWin32 = dialog; // Closure için local copy
+                            wpfApp.Dispatcher.BeginInvoke(new Action(() =>
+                            {
+                                try
+                                {
+                                    var hwnd = new WindowInteropHelper(dialogForWin32).Handle;
+                                    if (hwnd != IntPtr.Zero)
+                                    {
+                                        _logger.LogInformation("✅ Dialog HWND alındı: {HWND}", hwnd);
+                                        Console.WriteLine($"✅ Dialog HWND alındı: {hwnd}");
+                                        
+                                        // Pencereyi öne getir
+                                        SetForegroundWindow(hwnd);
+                                        ShowWindow(hwnd, SW_RESTORE);
+                                        SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                                        
+                                        // Pencereyi flash yap (dikkat çekmek için)
+                                        FlashWindow(hwnd, true);
+                                        
+                                        _logger.LogInformation("✅ Dialog Win32 API ile öne getirildi");
+                                        Console.WriteLine("✅ Dialog Win32 API ile öne getirildi");
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning("⚠️ Dialog HWND alınamadı (henüz hazır değil)");
+                                        Console.WriteLine("⚠️ Dialog HWND alınamadı (henüz hazır değil)");
+                                    }
+                                }
+                                catch (Exception win32Ex)
+                                {
+                                    _logger.LogWarning(win32Ex, "Win32 API ile pencere öne getirilemedi");
+                                    Console.WriteLine($"⚠️ Win32 API hatası: {win32Ex.Message}");
+                                }
+                            }));
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Win32 API çağrısı sırasında hata");
+                            Console.WriteLine($"⚠️ Win32 API çağrısı hatası: {ex.Message}");
+                        }
+                    });
+                    
+                    _logger.LogInformation("✅ Dialog gösterildi ve aktif edildi");
+                    Console.WriteLine("✅ Dialog gösterildi ve aktif edildi");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Connection request dialog gösterilemedi");
+                    var errorMsg = $"Connection request dialog gösterilemedi: {ex.Message}";
+                    _logger.LogError(ex, errorMsg);
+                    _logger.LogError("Stack trace: {StackTrace}", ex.StackTrace);
+                    Console.WriteLine($"❌ {errorMsg}");
+                    Console.WriteLine($"❌ Stack trace: {ex.StackTrace}");
+                    Console.WriteLine($"❌ Inner exception: {ex.InnerException?.Message ?? "None"}");
+                    dialogResultEvent.Set();
                 }
             });
+            
+            wpfApp.Dispatcher.BeginInvoke(action);
 
-            // Dialog sonucunu Backend'e gönder
-            if (dialogResult.HasValue)
+            // Dialog'un kabul/reddet butonuna tıklanmasını bekle (maksimum 60 saniye)
+            if (dialogResultEvent.Wait(TimeSpan.FromSeconds(60)))
             {
-                var accepted = dialogResult.Value;
-                _logger.LogInformation("Connection request yanıtı: ConnectionId={ConnectionId}, Accepted={Accepted}", connectionId, accepted);
-                
-                try
+                // Dialog sonucunu Backend'e gönder
+                if (dialogResult.HasValue)
                 {
-                    var success = await _backendClient.RespondToConnectionRequestAsync(connectionId, accepted);
-                    if (success)
+                    var accepted = dialogResult.Value;
+                    _logger.LogInformation("Connection request yanıtı: ConnectionId={ConnectionId}, Accepted={Accepted}", connectionId, accepted);
+                    
+                    try
                     {
-                        _logger.LogInformation("Connection request yanıtı Backend'e gönderildi: ConnectionId={ConnectionId}, Accepted={Accepted}", connectionId, accepted);
+                        var success = await _backendClient.RespondToConnectionRequestAsync(connectionId, accepted);
+                        if (success)
+                        {
+                            _logger.LogInformation("Connection request yanıtı Backend'e gönderildi: ConnectionId={ConnectionId}, Accepted={Accepted}", connectionId, accepted);
+                            
+                            if (accepted)
+                            {
+                                // Onay verildi - TCP Server'a onay ver
+                                _tcpServer.ApproveConnection();
+                                
+                                // Hedef Device ID'yi WebRTC peer service'e set et (ICE candidate gönderimi için)
+                                _webrtcPeer.SetTargetDeviceId(requesterId);
+                                
+                                // Dialog'u bağlantı kontrol moduna geçir
+                                if (dialog != null)
+                                {
+                                    var wpfAppForState = App.Instance;
+                                    if (wpfAppForState != null)
+                                    {
+                                        wpfAppForState.Dispatcher.Invoke(() =>
+                                        {
+                                            dialog.ShowConnectedState();
+                                        });
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Reddedildi - TCP Server'a reddet
+                                _tcpServer.RejectConnection();
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Connection request yanıtı Backend'e gönderilemedi: ConnectionId={ConnectionId}", connectionId);
+                            // Hata durumunda da reddet
+                            _tcpServer.RejectConnection();
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        _logger.LogWarning("Connection request yanıtı Backend'e gönderilemedi: ConnectionId={ConnectionId}", connectionId);
+                        _logger.LogError(ex, "Connection request yanıtı gönderilirken hata oluştu: ConnectionId={ConnectionId}", connectionId);
+                        // Hata durumunda da reddet
+                        _tcpServer.RejectConnection();
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Connection request yanıtı gönderilirken hata oluştu: ConnectionId={ConnectionId}", connectionId);
                 }
             }
             else
             {
-                _logger.LogWarning("Connection request dialog sonucu alınamadı: ConnectionId={ConnectionId}", connectionId);
+                _logger.LogWarning("Connection request dialog timeout: ConnectionId={ConnectionId}", connectionId);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Connection request işlenemedi");
+        }
+    }
+
+    /// <summary>
+    /// TCP client bağlandığında ekran paylaşımı bildirimi gösterir.
+    /// </summary>
+    private void OnTcpClientConnected(string clientEndPoint)
+    {
+        try
+        {
+            _logger.LogInformation("TCP client bağlandı, ekran paylaşımı bildirimi gösteriliyor: {EndPoint}", clientEndPoint);
+            
+            // WPF UI thread'inde notification göster
+            var wpfApp = App.Instance;
+            if (wpfApp == null)
+            {
+                _logger.LogWarning("WPF Application instance null - notification gösterilemedi");
+                return;
+            }
+
+            // BeginInvoke kullan (non-blocking)
+            wpfApp.Dispatcher.BeginInvoke(new System.Action(() =>
+            {
+                try
+                {
+                    var notification = new Views.ScreenSharingNotificationWindow();
+                    notification.Show(); // ShowDialog değil, Show - modal olmayan
+                    _logger.LogInformation("✅ Ekran paylaşımı bildirimi gösterildi");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Ekran paylaşımı bildirimi gösterilemedi: {Message}", ex.Message);
+                }
+            }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TCP client bağlantı bildirimi işlenemedi: {Message}", ex.Message);
         }
     }
 
@@ -624,5 +890,28 @@ public class AgentService : BackgroundService
         
         return rgbData;
     }
+
+    #region Win32 API - Pencere yönetimi için
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool FlashWindow(IntPtr hWnd, bool bInvert);
+
+    private const int SW_RESTORE = 9;
+    private static readonly IntPtr HWND_TOP = new IntPtr(0);
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_SHOWWINDOW = 0x0040;
+
+    #endregion
 }
 

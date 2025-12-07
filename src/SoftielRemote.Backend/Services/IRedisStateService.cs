@@ -32,11 +32,6 @@ public interface IRedisStateService
     Task SetConnectionRequestAsync(string connectionId, string targetDeviceId, string requesterId, TimeSpan? expiration = null);
 
     /// <summary>
-    /// Connection request'i Redis'ten alır.
-    /// </summary>
-    Task<string?> GetConnectionRequestAsync(string connectionId);
-
-    /// <summary>
     /// Connection request'i Redis'ten siler.
     /// </summary>
     Task RemoveConnectionRequestAsync(string connectionId);
@@ -50,5 +45,25 @@ public interface IRedisStateService
     /// Agent'ın connection ID'sini Redis'ten alır.
     /// </summary>
     Task<string?> GetAgentConnectionIdAsync(string deviceId);
+
+    /// <summary>
+    /// Controller'ın connection ID'sini Redis'te saklar.
+    /// </summary>
+    Task SetControllerConnectionIdAsync(string deviceId, string connectionId, TimeSpan? expiration = null);
+
+    /// <summary>
+    /// Controller'ın connection ID'sini Redis'ten alır.
+    /// </summary>
+    Task<string?> GetControllerConnectionIdAsync(string deviceId);
+
+    /// <summary>
+    /// Connection request'i Redis'ten alır (PendingConnectionRequest olarak).
+    /// </summary>
+    Task<Core.Dtos.PendingConnectionRequest?> GetConnectionRequestAsync(string connectionId);
+
+    /// <summary>
+    /// Connection request'i Redis'te günceller.
+    /// </summary>
+    Task UpdateConnectionRequestAsync(Core.Dtos.PendingConnectionRequest request);
 }
 

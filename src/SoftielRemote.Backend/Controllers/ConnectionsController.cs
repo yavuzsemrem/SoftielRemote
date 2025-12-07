@@ -173,7 +173,24 @@ public class ConnectionsController : ControllerBase
         // Agent'a SignalR üzerinden connection request bildirimi gönder
         try
         {
+            // Önce Redis'ten ConnectionId'yi kontrol et (hızlı)
             var agentConnectionId = await _redisState.GetAgentConnectionIdAsync(request.TargetDeviceId);
+            
+            // Redis'te yoksa PostgreSQL'den al (fallback)
+            if (string.IsNullOrEmpty(agentConnectionId))
+            {
+                var agentInfo = await _agentService.GetAgentInfoAsync(request.TargetDeviceId);
+                if (agentInfo != null && !string.IsNullOrEmpty(agentInfo.ConnectionId))
+                {
+                    agentConnectionId = agentInfo.ConnectionId;
+                    _logger.LogInformation("Agent ConnectionId PostgreSQL'den alındı: {DeviceId} -> {ConnectionId}", 
+                        request.TargetDeviceId, agentConnectionId);
+                    
+                    // Redis'e de kaydet (cache için)
+                    await _redisState.SetAgentConnectionIdAsync(request.TargetDeviceId, agentConnectionId, TimeSpan.FromHours(1));
+                }
+            }
+            
             if (!string.IsNullOrEmpty(agentConnectionId))
             {
                 await _hubContext.Clients.Client(agentConnectionId).SendAsync("ConnectionRequest", new
@@ -189,8 +206,39 @@ public class ConnectionsController : ControllerBase
             }
             else
             {
-                _logger.LogWarning("Agent'ın SignalR connection ID'si bulunamadı, connection request bildirimi gönderilemedi: TargetDeviceId={TargetDeviceId}", 
+                _logger.LogWarning("Agent'ın SignalR connection ID'si bulunamadı (Redis ve PostgreSQL'de yok), connection request bildirimi gönderilemedi: TargetDeviceId={TargetDeviceId}", 
                     request.TargetDeviceId);
+                
+                // ConnectionId bulunamadıysa, kısa bir süre bekle ve tekrar dene (race condition için)
+                await Task.Delay(500);
+                agentConnectionId = await _redisState.GetAgentConnectionIdAsync(request.TargetDeviceId);
+                if (string.IsNullOrEmpty(agentConnectionId))
+                {
+                    var agentInfo = await _agentService.GetAgentInfoAsync(request.TargetDeviceId);
+                    if (agentInfo != null && !string.IsNullOrEmpty(agentInfo.ConnectionId))
+                    {
+                        agentConnectionId = agentInfo.ConnectionId;
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(agentConnectionId))
+                {
+                    await _hubContext.Clients.Client(agentConnectionId).SendAsync("ConnectionRequest", new
+                    {
+                        ConnectionId = connectionId,
+                        RequesterId = request.RequesterId,
+                        RequesterName = pendingRequest.RequesterName,
+                        RequesterIp = pendingRequest.RequesterIp,
+                        RequestedAt = pendingRequest.RequestedAt
+                    });
+                    _logger.LogInformation("Connection request SignalR ile Agent'a gönderildi (retry sonrası): ConnectionId={ConnectionId}, AgentConnectionId={AgentConnectionId}", 
+                        connectionId, agentConnectionId);
+                }
+                else
+                {
+                    _logger.LogError("Agent'ın SignalR connection ID'si retry sonrası da bulunamadı: TargetDeviceId={TargetDeviceId}", 
+                        request.TargetDeviceId);
+                }
             }
         }
         catch (Exception ex)
@@ -198,15 +246,16 @@ public class ConnectionsController : ControllerBase
             _logger.LogError(ex, "Connection request SignalR bildirimi gönderilemedi (request kaydedildi)");
         }
 
-        _logger.LogInformation("Bağlantı isteği oluşturuldu: ConnectionId={ConnectionId}, TargetDeviceId={TargetDeviceId}, RequesterId={RequesterId}, AgentEndpoint={AgentEndpoint}",
-            connectionId, request.TargetDeviceId, request.RequesterId, agentEndpoint);
+        // Onay bekleniyor - AgentEndpoint'i şimdilik döndürme (onaylandıktan sonra döndürülecek)
+        _logger.LogInformation("Bağlantı isteği oluşturuldu: ConnectionId={ConnectionId}, TargetDeviceId={TargetDeviceId}, RequesterId={RequesterId}, Status=Pending (onay bekleniyor)",
+            connectionId, request.TargetDeviceId, request.RequesterId);
 
         return Ok(new ConnectionResponse
         {
             Success = true,
             Status = ConnectionStatus.Pending,
             ConnectionId = connectionId,
-            AgentEndpoint = agentEndpoint
+            AgentEndpoint = null // Onay bekleniyor, AgentEndpoint henüz verilmiyor
         });
     }
 
@@ -297,6 +346,61 @@ public class ConnectionsController : ControllerBase
 
         request.Status = responseRequest.Accepted ? ConnectionStatus.Connecting : ConnectionStatus.Rejected;
         await _connectionRequestRepository.UpdateAsync(request);
+
+        // Redis'te de güncelle
+        var pendingRequestDto = await _redisState.GetConnectionRequestAsync(responseRequest.ConnectionId);
+        if (pendingRequestDto != null)
+        {
+            pendingRequestDto.Status = request.Status;
+            await _redisState.UpdateConnectionRequestAsync(pendingRequestDto);
+        }
+
+        // Eğer kabul edildiyse, AgentEndpoint'i al
+        string? agentEndpoint = null;
+        if (responseRequest.Accepted)
+        {
+            var agent = await _agentService.GetAgentInfoAsync(request.TargetDeviceId);
+            if (agent != null)
+            {
+                var tcpPort = agent.TcpPort ?? 8888;
+                if (!string.IsNullOrEmpty(agent.IpAddress))
+                {
+                    agentEndpoint = $"{agent.IpAddress}:{tcpPort}";
+                }
+                else
+                {
+                    agentEndpoint = $"localhost:{tcpPort}";
+                }
+            }
+        }
+
+        // Controller'a SignalR üzerinden bildirim gönder
+        try
+        {
+            var requesterId = request.RequesterId ?? string.Empty;
+            var requesterConnectionId = await _redisState.GetControllerConnectionIdAsync(requesterId);
+            if (!string.IsNullOrEmpty(requesterConnectionId))
+            {
+                await _hubContext.Clients.Client(requesterConnectionId).SendAsync("ConnectionResponse", new
+                {
+                    ConnectionId = responseRequest.ConnectionId,
+                    Accepted = responseRequest.Accepted,
+                    Status = request.Status.ToString(),
+                    AgentEndpoint = agentEndpoint
+                });
+                _logger.LogInformation("Connection response SignalR ile Controller'a gönderildi: ConnectionId={ConnectionId}, RequesterConnectionId={RequesterConnectionId}, Accepted={Accepted}, AgentEndpoint={AgentEndpoint}", 
+                    responseRequest.ConnectionId, requesterConnectionId, responseRequest.Accepted, agentEndpoint ?? "null");
+            }
+            else
+            {
+                _logger.LogWarning("Controller'ın SignalR connection ID'si bulunamadı, connection response bildirimi gönderilemedi: RequesterId={RequesterId}", 
+                    request.RequesterId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Connection response SignalR bildirimi gönderilemedi (request güncellendi)");
+        }
 
         _logger.LogInformation("Bağlantı isteği yanıtlandı: ConnectionId={ConnectionId}, Accepted={Accepted}",
             responseRequest.ConnectionId, responseRequest.Accepted);

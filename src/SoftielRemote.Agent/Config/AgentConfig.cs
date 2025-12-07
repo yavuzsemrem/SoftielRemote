@@ -17,18 +17,21 @@ public class AgentConfig
 
     /// <summary>
     /// Ekran yakalama için frame interval (milisaniye).
+    /// Varsayılan: 33ms (30 FPS için).
     /// </summary>
-    public int FrameIntervalMs { get; set; } = 200;
+    public int FrameIntervalMs { get; set; } = 33;
 
     /// <summary>
     /// Ekran yakalama çözünürlüğü - Genişlik.
+    /// 0 ise tam ekran çözünürlüğü kullanılır.
     /// </summary>
-    public int ScreenWidth { get; set; } = 800;
+    public int ScreenWidth { get; set; } = 0;
 
     /// <summary>
     /// Ekran yakalama çözünürlüğü - Yükseklik.
+    /// 0 ise tam ekran çözünürlüğü kullanılır.
     /// </summary>
-    public int ScreenHeight { get; set; } = 600;
+    public int ScreenHeight { get; set; } = 0;
 
     /// <summary>
     /// TCP server port (Controller'dan gelen bağlantılar için).

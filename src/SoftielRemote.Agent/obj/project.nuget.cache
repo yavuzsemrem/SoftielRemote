@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "m0w4PtvC2MM=",
+  "dgSpecHash": "vWcLnc7hIK0=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Agent\\SoftielRemote.Agent.csproj",
+  "projectFilePath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Agent\\SoftielRemote.Agent.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Yavuz\\.nuget\\packages\\dnsclient\\1.5.0\\dnsclient.1.5.0.nupkg.sha512",
     "C:\\Users\\Yavuz\\.nuget\\packages\\ffmpegcore\\5.1.0\\ffmpegcore.5.1.0.nupkg.sha512",

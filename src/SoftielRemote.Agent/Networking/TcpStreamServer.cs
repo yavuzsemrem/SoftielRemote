@@ -16,6 +16,13 @@ public class TcpStreamServer
     private NetworkStream? _currentStream;
     private readonly ILogger<TcpStreamServer> _logger;
     private readonly int _port;
+    private readonly System.Threading.ManualResetEventSlim _approvalEvent = new(false);
+    private bool _waitingForApproval = false;
+
+    /// <summary>
+    /// Client bağlandığında tetiklenen event.
+    /// </summary>
+    public event Action<string>? OnClientConnected;
 
     public TcpStreamServer(int port, ILogger<TcpStreamServer> logger)
     {
@@ -34,16 +41,131 @@ public class TcpStreamServer
             _listener.Start();
             _logger.LogInformation("TCP Server başlatıldı. Port: {Port}", _port);
 
-            // İlk bağlantıyı bekle
-            _logger.LogInformation("Bağlantı bekleniyor...");
-            _currentClient = await _listener.AcceptTcpClientAsync(cancellationToken);
-            _currentStream = _currentClient.GetStream();
-            _logger.LogInformation("Client bağlandı: {EndPoint}", _currentClient.Client.RemoteEndPoint);
+            // Bağlantı kabul etme döngüsü (onay beklemeli)
+            _ = Task.Run(async () =>
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        // İlk bağlantıyı bekle
+                        _logger.LogInformation("Bağlantı bekleniyor...");
+                        var pendingClient = await _listener.AcceptTcpClientAsync(cancellationToken);
+                        
+                        // Onay bekleniyor mu kontrol et
+                        if (_waitingForApproval)
+                        {
+                            _logger.LogInformation("Bağlantı geldi, onay bekleniyor...");
+                            
+                            // Onay verilene kadar bekle (maksimum 60 saniye)
+                            if (_approvalEvent.Wait(TimeSpan.FromSeconds(60), cancellationToken))
+                            {
+                                // Onay verildi - bağlantıyı kabul et
+                                _currentClient = pendingClient;
+                                _currentStream = _currentClient.GetStream();
+                                
+                                // TCP stream'i non-blocking yap (önemli!)
+                                _currentStream.ReadTimeout = 100; // 100ms timeout
+                                _currentStream.WriteTimeout = 5000; // 5 saniye timeout
+                                
+                                var clientEndPoint = _currentClient.Client.RemoteEndPoint?.ToString() ?? "Unknown";
+                                _logger.LogInformation("✅ Client bağlandı (onay verildi): {EndPoint}", clientEndPoint);
+                                
+                                // Client bağlantı event'ini tetikle
+                                try
+                                {
+                                    OnClientConnected?.Invoke(clientEndPoint);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError(ex, "Client bağlantı event'i tetiklenirken hata oluştu");
+                                }
+                                
+                                // Onay event'ini reset et (bir sonraki bağlantı için)
+                                _approvalEvent.Reset();
+                                _waitingForApproval = false;
+                            }
+                            else
+                            {
+                                // Timeout - bağlantıyı reddet
+                                _logger.LogWarning("Onay zaman aşımına uğradı, bağlantı reddediliyor");
+                                pendingClient.Close();
+                                _approvalEvent.Reset();
+                                _waitingForApproval = false;
+                            }
+                        }
+                        else
+                        {
+                            // Onay beklenmiyor - direkt kabul et (eski davranış, backward compatibility)
+                            _currentClient = pendingClient;
+                            _currentStream = _currentClient.GetStream();
+                            
+                            _currentStream.ReadTimeout = 100;
+                            _currentStream.WriteTimeout = 5000;
+                            
+                            var clientEndPoint = _currentClient.Client.RemoteEndPoint?.ToString() ?? "Unknown";
+                            _logger.LogInformation("Client bağlandı (onay beklenmedi): {EndPoint}", clientEndPoint);
+                            
+                            try
+                            {
+                                OnClientConnected?.Invoke(clientEndPoint);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Client bağlantı event'i tetiklenirken hata oluştu");
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "TCP bağlantı kabul hatası");
+                    }
+                }
+            }, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "TCP Server başlatma hatası");
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Onay beklemeye başlar (connection request geldiğinde çağrılır).
+    /// </summary>
+    public void WaitForApproval()
+    {
+        _waitingForApproval = true;
+        _approvalEvent.Reset();
+        _logger.LogInformation("TCP Server onay bekliyor...");
+    }
+
+    /// <summary>
+    /// Onay verir (connection request kabul edildiğinde çağrılır).
+    /// </summary>
+    public void ApproveConnection()
+    {
+        if (_waitingForApproval)
+        {
+            _approvalEvent.Set();
+            _logger.LogInformation("✅ TCP Server onayı verildi, bağlantı kabul edilecek");
+        }
+    }
+
+    /// <summary>
+    /// Onayı reddeder (connection request reddedildiğinde çağrılır).
+    /// </summary>
+    public void RejectConnection()
+    {
+        if (_waitingForApproval)
+        {
+            _waitingForApproval = false;
+            _approvalEvent.Reset();
+            _logger.LogInformation("❌ TCP Server onayı reddedildi");
         }
     }
 
@@ -65,8 +187,12 @@ public class TcpStreamServer
             var json = JsonSerializer.Serialize(frame);
             var data = System.Text.Encoding.UTF8.GetBytes(json);
             
-            _logger.LogInformation("🔵 Frame gönderiliyor: Width={Width}, Height={Height}, DataLength={DataLength}, JsonLength={JsonLength}", 
-                frame.Width, frame.Height, frame.ImageData?.Length ?? 0, json.Length);
+            // İlk 5 frame için log, sonra her 30 frame'de bir
+            if (frame.FrameNumber <= 5 || frame.FrameNumber % 30 == 0)
+            {
+                _logger.LogInformation("🔵 Frame gönderiliyor: Width={Width}, Height={Height}, DataLength={DataLength}, JsonLength={JsonLength}, FrameNumber={FrameNumber}", 
+                    frame.Width, frame.Height, frame.ImageData?.Length ?? 0, data.Length, frame.FrameNumber);
+            }
             
             // Önce data uzunluğunu gönder (4 byte)
             var lengthBytes = BitConverter.GetBytes(data.Length);
@@ -75,8 +201,6 @@ public class TcpStreamServer
             // Sonra data'yı gönder
             await _currentStream.WriteAsync(data, 0, data.Length, cancellationToken);
             await _currentStream.FlushAsync(cancellationToken);
-            
-            _logger.LogInformation("✅ Frame gönderildi: {DataLength} bytes", data.Length);
         }
         catch (Exception ex)
         {
@@ -87,7 +211,7 @@ public class TcpStreamServer
     }
 
     /// <summary>
-    /// Client'tan gelen input mesajlarını okur.
+    /// Client'tan gelen input mesajlarını okur (non-blocking, timeout ile).
     /// </summary>
     public async Task<RemoteInputMessage?> ReceiveInputAsync(CancellationToken cancellationToken = default)
     {
@@ -98,12 +222,29 @@ public class TcpStreamServer
 
         try
         {
-            // Data uzunluğunu oku (4 byte)
-            var lengthBytes = new byte[4];
-            var bytesRead = await _currentStream.ReadAsync(lengthBytes, 0, 4, cancellationToken);
-            
-            if (bytesRead != 4)
+            // Stream'in data available olup olmadığını kontrol et (non-blocking)
+            if (!_currentStream.DataAvailable)
             {
+                return null; // Data yok, hemen dön (blocking yapma)
+            }
+
+            // Data uzunluğunu oku (4 byte) - timeout ile
+            var lengthBytes = new byte[4];
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(10); // 10ms timeout - blocking'i önle
+            
+            try
+            {
+                var bytesRead = await _currentStream.ReadAsync(lengthBytes, 0, 4, cts.Token);
+                
+                if (bytesRead != 4)
+                {
+                    return null;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Timeout - normal, data yok
                 return null;
             }
 
@@ -112,14 +253,24 @@ public class TcpStreamServer
             // Data'yı oku
             var data = new byte[dataLength];
             var totalRead = 0;
-            while (totalRead < dataLength)
+            cts.CancelAfter(100); // 100ms timeout
+            
+            try
             {
-                var read = await _currentStream.ReadAsync(data, totalRead, dataLength - totalRead, cancellationToken);
-                if (read == 0)
+                while (totalRead < dataLength)
                 {
-                    return null;
+                    var read = await _currentStream.ReadAsync(data, totalRead, dataLength - totalRead, cts.Token);
+                    if (read == 0)
+                    {
+                        return null;
+                    }
+                    totalRead += read;
                 }
-                totalRead += read;
+            }
+            catch (OperationCanceledException)
+            {
+                // Timeout - data tam okunamadı
+                return null;
             }
 
             // JSON'u deserialize et
@@ -130,7 +281,8 @@ public class TcpStreamServer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Input okuma hatası");
+            // Hata durumunda null döndür, frame gönderimini engelleme
+            _logger.LogDebug(ex, "Input okuma hatası (normal, data yoksa)");
             return null;
         }
     }

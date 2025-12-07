@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj": {}
+    "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj": {
+    "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj",
+        "projectUniqueName": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj",
         "projectName": "SoftielRemote.Backend",
-        "projectPath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj",
+        "projectPath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\SoftielRemote.Backend.csproj",
         "packagesPath": "C:\\Users\\Yavuz\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\obj\\",
+        "outputPath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Backend\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -32,8 +32,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj": {
-                "projectPath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj"
+              "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj": {
+                "projectPath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj"
               }
             }
           }
@@ -144,14 +144,14 @@
         }
       }
     },
-    "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj": {
+    "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj",
+        "projectUniqueName": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj",
         "projectName": "SoftielRemote.Core",
-        "projectPath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj",
+        "projectPath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj",
         "packagesPath": "C:\\Users\\Yavuz\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\obj\\",
+        "outputPath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

@@ -64,16 +64,9 @@ public class AgentService : IAgentService
             _logger.LogInformation("Agent kaydedildi: DeviceId={DeviceId}, IpAddress={IpAddress}, TcpPort={TcpPort}", 
                 deviceId, agentInfo.IpAddress ?? "null", agentInfo.TcpPort);
 
-            // Password üret
-            var password = PasswordGenerator.Generate();
-
-            _logger.LogInformation("Agent kaydedildi: {DeviceId}, Machine: {MachineName}, Password: {Password}", 
-                deviceId, agentInfo.MachineName, password);
-
             return new AgentRegistrationResponse
             {
                 DeviceId = deviceId,
-                Password = password,
                 Success = true
             };
         }

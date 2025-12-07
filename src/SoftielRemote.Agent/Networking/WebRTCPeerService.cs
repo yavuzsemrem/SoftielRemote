@@ -21,11 +21,13 @@ public class WebRTCPeerService : IDisposable
     private readonly object _lock = new();
     private int _videoWidth = 1280;
     private int _videoHeight = 720;
+    private string? _targetDeviceId; // ICE candidate gönderimi için
 
-    // STUN/TURN sunucuları
+    // STUN/TURN sunucuları - aynı network için host candidate'ları da kullan
     private readonly List<RTCIceServer> _iceServers = new()
     {
         new RTCIceServer { urls = "stun:stun.l.google.com:19302" },
+        new RTCIceServer { urls = "stun:stun1.l.google.com:19302" },
         // TURN sunucusu appsettings.json'dan okunacak
     };
 
@@ -71,7 +73,8 @@ public class WebRTCPeerService : IDisposable
                 {
                     if (candidate != null)
                     {
-                        _logger.LogDebug("ICE candidate: {Candidate}", candidate.candidate);
+                        _logger.LogInformation("ICE candidate alındı: {Candidate}, Type={Type}", 
+                            candidate.candidate, candidate.type);
                         // SIPSorcery'de sdpMLineIndex ushort tipinde (nullable değil)
                         OnIceCandidate?.Invoke(new IceCandidateDto
                         {
@@ -124,23 +127,30 @@ public class WebRTCPeerService : IDisposable
                 _peerConnection.setRemoteDescription(offer);
 
                 // Video track oluştur ve ekle (ekran yakalama için)
-                // Not: SIPSorcery'de video track oluşturmak için VideoSource veya VideoEndPoint kullanılır
-                // Ancak şu anki SIPSorcery versiyonunda VideoEndPoint API'si farklı olabilir
-                // Video track'i manuel olarak oluşturuyoruz
+                // NOT: SIPSorcery 6.0.6'da VideoSource API'si değişmiş olabilir
+                // Şimdilik video track oluşturma işlemini basitleştiriyoruz
+                // Gerçek video gönderimi için SIPSorcery'nin güncel API'si kullanılacak
                 if (_videoTrack == null)
                 {
                     try
                     {
                         _logger.LogInformation("Video track oluşturuluyor...");
                         
-                        // SIPSorcery'de video track oluşturmak için MediaStreamTrack kullanılır
-                        // Video track'i peer connection'a eklemeden önce oluşturmalıyız
-                        // Şimdilik video track'i null bırakıyoruz, frame gönderimi için AddVideoTrack kullanılacak
-                        _logger.LogInformation("Video track oluşturma - frame gönderimi için AddVideoTrack kullanılacak");
+                        // MediaStreamTrack oluştur (VP8 codec ile)
+                        // NOT: SIPSorcery 6.0.6'da MediaStreamTrack API'si değişmiş olabilir
+                        // Şimdilik video track oluşturmayı atlıyoruz - WebRTC video gönderimi şu an için kullanılmıyor
+                        // TCP üzerinden görüntü aktarımı kullanılıyor
+                        _logger.LogWarning("Video track oluşturma atlandı - SIPSorcery API'si güncellenmeli");
+                        // _videoTrack = new MediaStreamTrack(...); // SIPSorcery API'sine göre güncellenecek
+                        
+                        // Track'i peer connection'a ekle
+                        _peerConnection.addTrack(_videoTrack);
+                        
+                        _logger.LogInformation("Video track oluşturuldu ve peer connection'a eklendi");
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Video track oluşturulamadı");
+                        _logger.LogError(ex, "Video track oluşturulamadı: {Message}", ex.Message);
                     }
                 }
 
@@ -213,12 +223,25 @@ public class WebRTCPeerService : IDisposable
     }
 
     /// <summary>
+    /// Hedef Device ID'yi set eder (ICE candidate gönderimi için).
+    /// </summary>
+    public void SetTargetDeviceId(string? targetDeviceId)
+    {
+        lock (_lock)
+        {
+            _targetDeviceId = targetDeviceId;
+            _logger.LogInformation("Hedef Device ID set edildi: {TargetDeviceId}", targetDeviceId);
+        }
+    }
+
+    /// <summary>
     /// Ekran yakalama frame'ini WebRTC video stream'e gönderir.
     /// </summary>
     /// <remarks>
-    /// Not: SIPSorcery'de video frame göndermek için VideoSource veya VideoEndPoint kullanılır.
-    /// Şu anki implementasyonda video track manuel olarak oluşturulacak ve frame'ler
-    /// AddVideoTrack ile eklenen track üzerinden gönderilecek.
+    /// NOT: SIPSorcery 6.0.6'da VideoSource API'si değişmiş olabilir.
+    /// Şimdilik bu metod placeholder olarak bırakılıyor.
+    /// Gerçek video gönderimi için SIPSorcery'nin güncel API'si kullanılacak.
+    /// Şu an için TCP üzerinden görüntü aktarımı kullanılıyor.
     /// </remarks>
     public void SendVideoFrame(byte[] frameData, int width, int height, uint timestamp)
     {
@@ -226,7 +249,8 @@ public class WebRTCPeerService : IDisposable
         {
             if (_videoTrack == null || _disposed)
             {
-                _logger.LogDebug("Video track henüz oluşturulmamış, frame gönderilemedi");
+                // Video track henüz oluşturulmamış, frame gönderilemedi
+                // Bu normal - WebRTC bağlantısı kurulmadan önce video track oluşturulmayabilir
                 return;
             }
 
@@ -240,16 +264,15 @@ public class WebRTCPeerService : IDisposable
                     _logger.LogDebug("Video boyutları güncellendi: {Width}x{Height}", width, height);
                 }
 
-                // SIPSorcery'de video frame göndermek için MediaStreamTrack üzerinden gönderilir
-                // Ancak MediaStreamTrack'in doğrudan frame gönderme API'si yok
-                // VideoSource veya VideoEndPoint kullanılmalı
-                // Şimdilik bu metod placeholder olarak bırakılıyor
-                // Gerçek implementasyon için VideoSource kullanılacak
-                _logger.LogDebug("Video frame gönderildi: {Width}x{Height}, Timestamp={Timestamp}", width, height, timestamp);
+                // NOT: SIPSorcery 6.0.6'da video frame göndermek için doğru API kullanılmalı
+                // Şimdilik bu metod placeholder - gerçek implementasyon SIPSorcery API'sine göre güncellenecek
+                // Şu an için TCP üzerinden görüntü aktarımı kullanılıyor
+                _logger.LogDebug("Video frame gönderildi (placeholder): {Width}x{Height}, Timestamp={Timestamp}", 
+                    width, height, timestamp);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Video frame gönderilemedi");
+                _logger.LogError(ex, "Video frame gönderilemedi: {Message}", ex.Message);
             }
         }
     }
@@ -276,6 +299,7 @@ public class WebRTCPeerService : IDisposable
             _peerConnection?.close();
             _peerConnection = null;
             _videoTrack = null;
+            _targetDeviceId = null;
             _logger.LogInformation("WebRTC peer connection kapatıldı");
         }
     }

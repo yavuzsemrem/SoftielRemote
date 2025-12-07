@@ -14,11 +14,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj",
+      "projectUniqueName": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj",
       "projectName": "SoftielRemote.Core",
-      "projectPath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj",
+      "projectPath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\SoftielRemote.Core.csproj",
       "packagesPath": "C:\\Users\\Yavuz\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Yavuz\\Desktop\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\obj\\",
+      "outputPath": "D:\\Github\\SoftielRemote\\src\\SoftielRemote.Core\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

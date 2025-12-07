@@ -19,10 +19,5 @@ public class AgentRegistrationResponse
     /// Hata durumunda hata mesajı.
     /// </summary>
     public string? ErrorMessage { get; set; }
-
-    /// <summary>
-    /// Agent'a atanan password (bağlantı için).
-    /// </summary>
-    public string Password { get; set; } = string.Empty;
 }
 

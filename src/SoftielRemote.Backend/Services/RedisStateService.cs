@@ -137,26 +137,6 @@ public class RedisStateService : IRedisStateService
         }
     }
 
-    public async Task<string?> GetConnectionRequestAsync(string connectionId)
-    {
-        if (!_isAvailable || _redis == null) return null;
-
-        try
-        {
-            if (!_redis.IsConnected) return null;
-            
-            var db = _redis.GetDatabase();
-            var key = $"connection:request:{connectionId}";
-            var value = await db.StringGetAsync(key);
-            return value.HasValue ? value.ToString() : null;
-        }
-        catch
-        {
-            // Redis bağlantısı başarısız, null döndür (PostgreSQL fallback kullanılacak)
-            return null;
-        }
-    }
-
     public async Task RemoveConnectionRequestAsync(string connectionId)
     {
         if (!_isAvailable || _redis == null) return;
@@ -212,6 +192,89 @@ public class RedisStateService : IRedisStateService
         {
             // Redis bağlantısı başarısız, null döndür (PostgreSQL fallback kullanılacak)
             return null;
+        }
+    }
+
+    public async Task SetControllerConnectionIdAsync(string deviceId, string connectionId, TimeSpan? expiration = null)
+    {
+        if (!_isAvailable || _redis == null) return;
+
+        try
+        {
+            if (!_redis.IsConnected) return;
+            
+            var db = _redis.GetDatabase();
+            var key = $"controller:connection:{deviceId}";
+            await db.StringSetAsync(key, connectionId, expiration ?? TimeSpan.FromHours(1));
+            _logger.LogDebug("Controller connection ID Redis'e kaydedildi: {DeviceId} -> {ConnectionId}", deviceId, connectionId);
+        }
+        catch
+        {
+            // Redis bağlantısı başarısız, sessizce fallback'e geç
+        }
+    }
+
+    public async Task<string?> GetControllerConnectionIdAsync(string deviceId)
+    {
+        if (!_isAvailable || _redis == null) return null;
+
+        try
+        {
+            if (!_redis.IsConnected) return null;
+            
+            var db = _redis.GetDatabase();
+            var key = $"controller:connection:{deviceId}";
+            var value = await db.StringGetAsync(key);
+            return value.HasValue ? value.ToString() : null;
+        }
+        catch
+        {
+            // Redis bağlantısı başarısız, null döndür
+            return null;
+        }
+    }
+
+    public async Task<Core.Dtos.PendingConnectionRequest?> GetConnectionRequestAsync(string connectionId)
+    {
+        if (!_isAvailable || _redis == null) return null;
+
+        try
+        {
+            if (!_redis.IsConnected) return null;
+            
+            var db = _redis.GetDatabase();
+            var key = $"connection:request:{connectionId}";
+            var value = await db.StringGetAsync(key);
+            if (value.HasValue)
+            {
+                return JsonConvert.DeserializeObject<Core.Dtos.PendingConnectionRequest>(value.ToString());
+            }
+            return null;
+        }
+        catch
+        {
+            // Redis bağlantısı başarısız, null döndür
+            return null;
+        }
+    }
+
+    public async Task UpdateConnectionRequestAsync(Core.Dtos.PendingConnectionRequest request)
+    {
+        if (!_isAvailable || _redis == null) return;
+
+        try
+        {
+            if (!_redis.IsConnected) return;
+            
+            var db = _redis.GetDatabase();
+            var key = $"connection:request:{request.ConnectionId}";
+            var json = JsonConvert.SerializeObject(request);
+            await db.StringSetAsync(key, json, TimeSpan.FromMinutes(10));
+            _logger.LogDebug("Connection request Redis'te güncellendi: {ConnectionId}", request.ConnectionId);
+        }
+        catch
+        {
+            // Redis bağlantısı başarısız, sessizce fallback'e geç
         }
     }
 }
