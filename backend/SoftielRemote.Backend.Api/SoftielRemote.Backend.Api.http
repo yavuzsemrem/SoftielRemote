@@ -1,0 +1,6 @@
+@SoftielRemote.Backend.Api_HostAddress = http://localhost:5210
+
+GET {{SoftielRemote.Backend.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

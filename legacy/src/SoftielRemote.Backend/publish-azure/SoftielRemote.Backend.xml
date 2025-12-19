@@ -1,0 +1,625 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SoftielRemote.Backend</name>
+    </assembly>
+    <members>
+        <member name="T:SoftielRemote.Backend.Controllers.AgentsController">
+            <summary>
+            Agent kayıt ve yönetim endpoint'leri.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.AgentsController.Register(SoftielRemote.Core.Dtos.AgentRegistrationRequest)">
+            <summary>
+            Agent'ı Backend'e kayıt eder.
+            </summary>
+            <remarks>
+            Agent veya App, Backend'e kayıt olmak için bu endpoint'i kullanır.
+            DeviceId verilmişse ve geçerliyse kullanılır, yoksa yeni bir DeviceId üretilir.
+            
+            Örnek istek:
+            
+                POST /api/agents/register
+                {
+                    "deviceId": "280969031",
+                    "machineName": "DESKTOP-ABC123",
+                    "operatingSystem": "Microsoft Windows NT 10.0.19045.0",
+                    "ipAddress": "192.168.1.100",
+                    "tcpPort": 8888
+                }
+            
+            Rate Limit: 10 istek/dakika (IP bazlı)
+            </remarks>
+            <param name="request">Agent kayıt bilgileri</param>
+            <returns>Kayıt başarılıysa DeviceId döner</returns>
+            <response code="200">Kayıt başarılı</response>
+            <response code="400">Geçersiz istek veya validation hatası</response>
+            <response code="429">Rate limit aşıldı</response>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.AgentsController.Heartbeat(SoftielRemote.Core.Dtos.HeartbeatRequest)">
+            <summary>
+            Agent'ın heartbeat göndermesi için endpoint.
+            </summary>
+            <remarks>
+            Agent, online durumunu korumak için düzenli olarak (örn: her 30 saniyede bir) heartbeat gönderir.
+            Bu endpoint Agent'ın LastSeen zamanını günceller ve online durumunu korur.
+            
+            Örnek istek:
+            
+                POST /api/agents/heartbeat
+                {
+                    "deviceId": "280969031",
+                    "ipAddress": "192.168.1.100"
+                }
+            </remarks>
+            <param name="request">Heartbeat bilgileri</param>
+            <returns>200 OK</returns>
+            <response code="200">Heartbeat başarılı</response>
+            <response code="400">Geçersiz istek</response>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.AgentsController.DiscoverAgent(System.String)">
+            <summary>
+            Agent'ın bu Backend'de olup olmadığını kontrol eder (Discovery için).
+            </summary>
+            <remarks>
+            App veya başka bir Backend, belirli bir Agent'ın bu Backend'de kayıtlı olup olmadığını kontrol etmek için kullanır.
+            
+            Örnek istek:
+            
+                GET /api/agents/discovery/280969031
+            
+            </remarks>
+            <param name="deviceId">Aranacak Agent'ın Device ID'si</param>
+            <returns>Agent bulunduysa Backend URL ve online durumu döner</returns>
+            <response code="200">Agent bulundu veya bulunamadı (Found=false)</response>
+            <response code="400">Geçersiz DeviceId</response>
+        </member>
+        <member name="T:SoftielRemote.Backend.Controllers.BackendRegistryController">
+            <summary>
+            Backend Registry endpoint'leri (farklı network'lerdeki Backend'lerin keşfi için).
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.BackendRegistryController.GetActiveBackends">
+            <summary>
+            Aktif Backend URL'lerini döndürür (Agent/App'in keşfi için).
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.BackendRegistryController.RegisterBackend(SoftielRemote.Backend.Controllers.BackendRegistrationRequest)">
+            <summary>
+            Backend'i kayıt eder veya günceller (Backend başladığında çağrılır).
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.BackendRegistryController.Heartbeat(SoftielRemote.Backend.Controllers.BackendHeartbeatRequest)">
+            <summary>
+            Backend heartbeat (Backend'in aktif olduğunu günceller).
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Controllers.BackendRegistrationRequest">
+            <summary>
+            Backend kayıt isteği DTO.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Controllers.BackendHeartbeatRequest">
+            <summary>
+            Backend heartbeat isteği DTO.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Controllers.ConnectionsController">
+            <summary>
+            Bağlantı yönetimi endpoint'leri.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.ConnectionsController.RequestConnection(SoftielRemote.Core.Dtos.ConnectionRequest)">
+            <summary>
+            Belirli bir Device ID'ye bağlantı isteği gönderir.
+            </summary>
+            <remarks>
+            Controller (App), belirli bir Agent'a bağlanmak için bu endpoint'i kullanır.
+            Agent online olmalıdır, aksi takdirde istek reddedilir.
+            
+            Örnek istek:
+            
+                POST /api/connections/request
+                {
+                    "targetDeviceId": "280969031",
+                    "requesterId": "662042270",
+                    "requesterName": "Support Technician",
+                    "qualityLevel": 1
+                }
+            
+            Rate Limit: 5 istek/dakika (IP bazlı)
+            </remarks>
+            <param name="request">Bağlantı isteği bilgileri</param>
+            <returns>Bağlantı isteği oluşturulduysa ConnectionId ve AgentEndpoint döner</returns>
+            <response code="200">İstek başarılı (Success=true veya false)</response>
+            <response code="400">Geçersiz istek veya validation hatası</response>
+            <response code="429">Rate limit aşıldı</response>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.ConnectionsController.GetPendingRequest(System.String)">
+            <summary>
+            Agent'ın bekleyen bağlantı isteklerini kontrol etmesi için endpoint.
+            </summary>
+            <remarks>
+            Agent, kendisine gelen bekleyen bağlantı isteklerini kontrol etmek için bu endpoint'i kullanır.
+            
+            Örnek istek:
+            
+                GET /api/connections/pending/280969031
+            
+            </remarks>
+            <param name="deviceId">Agent'ın Device ID'si</param>
+            <returns>Bekleyen bağlantı isteği varsa döner, yoksa null</returns>
+            <response code="200">Bekleyen istek bulundu veya bulunamadı (null)</response>
+        </member>
+        <member name="M:SoftielRemote.Backend.Controllers.ConnectionsController.RespondToConnection(SoftielRemote.Backend.Controllers.ConnectionResponseRequest)">
+            <summary>
+            Bağlantı isteğini onayla veya reddet.
+            </summary>
+            <remarks>
+            Agent, kendisine gelen bağlantı isteğini onaylamak veya reddetmek için bu endpoint'i kullanır.
+            
+            Örnek istek (Onay):
+            
+                POST /api/connections/response
+                {
+                    "connectionId": "123e4567-e89b-12d3-a456-426614174000",
+                    "accepted": true
+                }
+            
+            Örnek istek (Red):
+            
+                POST /api/connections/response
+                {
+                    "connectionId": "123e4567-e89b-12d3-a456-426614174000",
+                    "accepted": false
+                }
+            </remarks>
+            <param name="responseRequest">Bağlantı yanıtı bilgileri</param>
+            <returns>200 OK</returns>
+            <response code="200">Yanıt başarılı</response>
+            <response code="400">Geçersiz istek</response>
+            <response code="404">Bağlantı isteği bulunamadı</response>
+        </member>
+        <member name="T:SoftielRemote.Backend.Controllers.ConnectionResponseRequest">
+            <summary>
+            Bağlantı isteği yanıtı.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Models.AgentEntity">
+            <summary>
+            PostgreSQL'de saklanan Agent entity.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentEntity.DeviceId">
+            <summary>
+            Agent'ın benzersiz Device ID'si (Primary Key).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentEntity.MachineName">
+            <summary>
+            Agent'ın makine adı.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentEntity.OperatingSystem">
+            <summary>
+            Agent'ın işletim sistemi bilgisi.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentEntity.LastSeen">
+            <summary>
+            Agent'ın son görülme zamanı (heartbeat için).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentEntity.ConnectionId">
+            <summary>
+            Agent'ın SignalR connection ID'si (varsa).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentEntity.IpAddress">
+            <summary>
+            Agent'ın IP adresi (TCP bağlantısı için).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentEntity.TcpPort">
+            <summary>
+            Agent'ın TCP port numarası.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Models.AgentEntity.ToAgentInfo">
+            <summary>
+            AgentInfo'ya dönüştürür.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Models.AgentEntity.FromAgentInfo(SoftielRemote.Backend.Models.AgentInfo)">
+            <summary>
+            AgentInfo'dan oluşturur.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Models.ConnectionRequestEntity">
+            <summary>
+            PostgreSQL'de saklanan Connection Request entity.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.ConnectionRequestEntity.ConnectionId">
+            <summary>
+            Bağlantı isteğinin benzersiz ID'si (Primary Key).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.ConnectionRequestEntity.TargetDeviceId">
+            <summary>
+            Hedef Agent'ın Device ID'si.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.ConnectionRequestEntity.RequesterId">
+            <summary>
+            İstek yapan kişinin ID'si (opsiyonel).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.ConnectionRequestEntity.RequesterName">
+            <summary>
+            İstek yapan kişinin adı (opsiyonel).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.ConnectionRequestEntity.RequesterIp">
+            <summary>
+            İstek yapan kişinin IP adresi (opsiyonel).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.ConnectionRequestEntity.RequestedAt">
+            <summary>
+            İstek zamanı.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.ConnectionRequestEntity.Status">
+            <summary>
+            Bağlantı durumu.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Models.ConnectionRequestEntity.GetStatus">
+            <summary>
+            Core.Enums.ConnectionStatus'a dönüştürür.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Models.ConnectionRequestEntity.ToCorePendingConnectionRequest">
+            <summary>
+            Core.Dtos.PendingConnectionRequest'e dönüştürür.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Models.ConnectionRequestEntity.ToPendingConnectionRequest">
+            <summary>
+            Backend.Models.PendingConnectionRequest'e dönüştürür.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Models.ConnectionRequestEntity.FromPendingConnectionRequest(SoftielRemote.Core.Dtos.PendingConnectionRequest)">
+            <summary>
+            Core.Dtos.PendingConnectionRequest'ten oluşturur.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Models.AgentInfo">
+            <summary>
+            Backend'de tutulan Agent bilgisi.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentInfo.DeviceId">
+            <summary>
+            Agent'ın benzersiz Device ID'si.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentInfo.MachineName">
+            <summary>
+            Agent'ın makine adı.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentInfo.OperatingSystem">
+            <summary>
+            Agent'ın işletim sistemi bilgisi.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentInfo.LastSeen">
+            <summary>
+            Agent'ın son görülme zamanı (heartbeat için).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentInfo.ConnectionId">
+            <summary>
+            Agent'ın SignalR connection ID'si (varsa).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentInfo.IpAddress">
+            <summary>
+            Agent'ın IP adresi (TCP bağlantısı için).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentInfo.TcpPort">
+            <summary>
+            Agent'ın TCP port numarası. App için null olabilir (App TCP server çalıştırmaz).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.AgentInfo.IsOnline">
+            <summary>
+            Agent'ın online olup olmadığı.
+            Faz 1: LastSeen'e göre kontrol (5 dakika içinde heartbeat geldiyse online)
+            Faz 2: SignalR ConnectionId ile kontrol edilecek
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Models.BackendRegistryEntity">
+            <summary>
+            Backend kayıt bilgileri (farklı network'lerdeki Backend'lerin keşfi için).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.BackendRegistryEntity.BackendId">
+            <summary>
+            Backend'in benzersiz ID'si (Primary Key).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.BackendRegistryEntity.PublicUrl">
+            <summary>
+            Backend'in public URL'i (internet üzerinden erişilebilir).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.BackendRegistryEntity.LocalIp">
+            <summary>
+            Backend'in local IP adresi (aynı network içinde).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.BackendRegistryEntity.LastSeen">
+            <summary>
+            Backend'in son görülme zamanı (heartbeat).
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.BackendRegistryEntity.IsActive">
+            <summary>
+            Backend'in aktif olup olmadığı.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Models.BackendRegistryEntity.Description">
+            <summary>
+            Backend'in açıklaması (opsiyonel).
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Models.PendingConnectionRequest">
+            <summary>
+            Bekleyen bağlantı isteği (Backend'de kullanılan model).
+            Core.Dtos.PendingConnectionRequest ile aynı, ama Backend'de repository için kullanılıyor.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Data.ApplicationDbContext">
+            <summary>
+            PostgreSQL veritabanı için DbContext.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Data.ApplicationDbContext.Agents">
+            <summary>
+            Agent'lar tablosu.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Data.ApplicationDbContext.ConnectionRequests">
+            <summary>
+            Bekleyen bağlantı istekleri tablosu.
+            </summary>
+        </member>
+        <member name="P:SoftielRemote.Backend.Data.ApplicationDbContext.BackendRegistry">
+            <summary>
+            Backend kayıt tablosu (farklı network'lerdeki Backend'lerin keşfi için).
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Hubs.ConnectionHub">
+            <summary>
+            SignalR Hub - Agent ve Controller arasında WebRTC signaling için.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Hubs.ConnectionHub.SendWebRTCSignaling(SoftielRemote.Core.Dtos.WebRTCSignalingMessage)">
+            <summary>
+            WebRTC signaling mesajını hedef Device ID'ye iletir.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Hubs.ConnectionHub.RegisterDevice(System.String)">
+            <summary>
+            Device ID'yi connection'a kaydeder (Agent veya App bağlandığında).
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Migrations.InitialCreate">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.InitialCreate.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.InitialCreate.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.InitialCreate.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:SoftielRemote.Backend.Migrations.EnableRowLevelSecurity">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.EnableRowLevelSecurity.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.EnableRowLevelSecurity.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.EnableRowLevelSecurity.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:SoftielRemote.Backend.Migrations.AddBackendRegistry">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.AddBackendRegistry.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.AddBackendRegistry.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:SoftielRemote.Backend.Migrations.AddBackendRegistry.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:SoftielRemote.Backend.Repositories.IAgentRepository">
+            <summary>
+            Agent verilerini yönetmek için repository interface'i.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Repositories.IAgentRepository.RegisterOrUpdateAsync(SoftielRemote.Backend.Models.AgentInfo)">
+            <summary>
+            Agent'ı kayıt eder veya günceller.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Repositories.IAgentRepository.GetByDeviceIdAsync(System.String)">
+            <summary>
+            Device ID'ye göre Agent'ı bulur.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Repositories.IAgentRepository.GetOnlineAgentsAsync">
+            <summary>
+            Tüm online Agent'ları getirir.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Repositories.IAgentRepository.GetAllAgentsAsync">
+            <summary>
+            Tüm Agent'ları getirir (debug için).
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Repositories.IAgentRepository.UpdateConnectionIdAsync(System.String,System.String)">
+            <summary>
+            Agent'ın connection ID'sini günceller.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Repositories.IAgentRepository.UpdateLastSeenAsync(System.String,System.String)">
+            <summary>
+            Agent'ın heartbeat'ini günceller.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Repositories.IConnectionRequestRepository">
+            <summary>
+            Bağlantı isteklerini yöneten repository interface'i.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Repositories.InMemoryAgentRepository">
+            <summary>
+            In-memory Agent repository implementasyonu (MVP için).
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Repositories.InMemoryConnectionRequestRepository">
+            <summary>
+            In-memory bağlantı isteği repository implementasyonu.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Repositories.PostgreSqlAgentRepository">
+            <summary>
+            PostgreSQL tabanlı Agent repository implementasyonu (Production-ready).
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Repositories.PostgreSqlConnectionRequestRepository">
+            <summary>
+            PostgreSQL tabanlı Connection Request repository implementasyonu (Production-ready).
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Services.AgentService">
+            <summary>
+            Agent işlemlerini yöneten service implementasyonu.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Services.IAgentService">
+            <summary>
+            Agent işlemlerini yöneten service interface'i.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IAgentService.RegisterAsync(SoftielRemote.Core.Dtos.AgentRegistrationRequest)">
+            <summary>
+            Agent'ı kayıt eder.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IAgentService.IsAgentOnlineAsync(System.String)">
+            <summary>
+            Agent'ın online durumunu kontrol eder.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IAgentService.GetAgentInfoAsync(System.String)">
+            <summary>
+            Agent bilgilerini getirir.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IAgentService.UpdateLastSeenAsync(System.String,System.String)">
+            <summary>
+            Agent'ın LastSeen zamanını günceller (heartbeat).
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IAgentService.GetAllAgentsAsync">
+            <summary>
+            Tüm Agent'ları getirir (debug için).
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Services.IRedisStateService">
+            <summary>
+            Redis state management servisi interface'i.
+            Agent online/offline durumu ve connection request'leri için.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.SetAgentOnlineAsync(System.String,System.Nullable{System.TimeSpan})">
+            <summary>
+            Agent'ın online durumunu Redis'te saklar.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.SetAgentOfflineAsync(System.String)">
+            <summary>
+            Agent'ın offline durumunu Redis'te işaretler.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.IsAgentOnlineAsync(System.String)">
+            <summary>
+            Agent'ın online olup olmadığını kontrol eder.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.CreateConnectionRequestAsync(SoftielRemote.Core.Dtos.PendingConnectionRequest)">
+            <summary>
+            Connection request'i Redis'te saklar (geçici olarak).
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.SetConnectionRequestAsync(System.String,System.String,System.String,System.Nullable{System.TimeSpan})">
+            <summary>
+            Connection request'i Redis'te saklar (geçici olarak) - eski metod (backward compatibility).
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.RemoveConnectionRequestAsync(System.String)">
+            <summary>
+            Connection request'i Redis'ten siler.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.SetAgentConnectionIdAsync(System.String,System.String,System.Nullable{System.TimeSpan})">
+            <summary>
+            Agent'ın connection ID'sini Redis'te saklar.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.GetAgentConnectionIdAsync(System.String)">
+            <summary>
+            Agent'ın connection ID'sini Redis'ten alır.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.SetControllerConnectionIdAsync(System.String,System.String,System.Nullable{System.TimeSpan})">
+            <summary>
+            Controller'ın connection ID'sini Redis'te saklar.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.GetControllerConnectionIdAsync(System.String)">
+            <summary>
+            Controller'ın connection ID'sini Redis'ten alır.
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.GetConnectionRequestAsync(System.String)">
+            <summary>
+            Connection request'i Redis'ten alır (PendingConnectionRequest olarak).
+            </summary>
+        </member>
+        <member name="M:SoftielRemote.Backend.Services.IRedisStateService.UpdateConnectionRequestAsync(SoftielRemote.Core.Dtos.PendingConnectionRequest)">
+            <summary>
+            Connection request'i Redis'te günceller.
+            </summary>
+        </member>
+        <member name="T:SoftielRemote.Backend.Services.RedisStateService">
+            <summary>
+            Redis state management servisi implementasyonu.
+            Agent online/offline durumu ve connection request'leri için.
+            </summary>
+        </member>
+    </members>
+</doc>
