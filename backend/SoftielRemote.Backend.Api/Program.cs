@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using SoftielRemote.Backend.Api.Data;
+using SoftielRemote.Backend.Api.Hubs;
 using SoftielRemote.Backend.Api.Options;
 using SoftielRemote.Backend.Api.Services;
 using System.Text;
@@ -30,7 +31,11 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 // DI
 builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
 builder.Services.AddScoped<AuthRepository>();
+builder.Services.AddScoped<DeviceRepository>();
+builder.Services.AddScoped<SessionRepository>();
 builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<SessionNotificationService>();
+builder.Services.AddScoped<DeviceNotificationService>();
 
 // Auth
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -51,9 +56,29 @@ builder.Services
           ValidateLifetime = true,
           ClockSkew = TimeSpan.FromSeconds(30)
       };
+
+      // SignalR WebSocket bağlantıları için JWT token'ı query string'den de oku
+      options.Events = new JwtBearerEvents
+      {
+          OnMessageReceived = context =>
+          {
+              var accessToken = context.Request.Query["access_token"];
+              var path = context.HttpContext.Request.Path;
+
+              if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+              {
+                  context.Token = accessToken;
+              }
+
+              return Task.CompletedTask;
+          }
+      };
   });
 
 builder.Services.AddAuthorization();
+
+// SignalR
+builder.Services.AddSignalR();
 
 // Controllers + Swagger
 builder.Services.AddControllers();
@@ -132,5 +157,8 @@ app.MapGet("/health", async (IDbConnectionFactory dbFactory) =>
 });
 
 app.MapControllers();
+
+// SignalR Hub
+app.MapHub<SessionHub>("/hubs/sessions");
 
 app.Run();

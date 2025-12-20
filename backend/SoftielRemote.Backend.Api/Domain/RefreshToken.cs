@@ -9,3 +9,4 @@ public sealed class RefreshToken
     public DateTime ExpiresAt { get; init; }
     public bool IsRevoked { get; init; }
 }
+

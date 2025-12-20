@@ -9,3 +9,4 @@ public sealed class User
     public bool IsActive { get; init; }
     public DateTime CreatedAt { get; init; }
 }
+
